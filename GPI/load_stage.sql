@@ -19,24 +19,19 @@
 
 -- 1. Update latest_update field to new date 
 BEGIN
-   EXECUTE IMMEDIATE 'ALTER TABLE vocabulary DROP COLUMN latest_update';
-EXCEPTION WHEN OTHERS THEN NULL;
+   DEVV5.VOCABULARY_PACK.SetLatestUpdate (pVocabularyName        => 'GPI',
+                                          pVocabularyDate        => TO_DATE ('20150506', 'yyyymmdd'),
+                                          pVocabularyVersion     => 'RXNORM CROSS REFERENCE 15.2.1.002',
+                                          pVocabularyDevSchema   => 'DEV_GPI');
 END;
-ALTER TABLE vocabulary ADD latest_update DATE;
-UPDATE vocabulary SET latest_update=to_date('20150506','yyyymmdd'), vocabulary_version='RXNORM CROSS REFERENCE 15.2.1.002' WHERE vocabulary_id='GPI'; 
 COMMIT;
 
--- 2. Truncate all working tables and remove indices
+-- 2. Truncate all working tables
 TRUNCATE TABLE concept_stage;
 TRUNCATE TABLE concept_relationship_stage;
 TRUNCATE TABLE concept_synonym_stage;
-ALTER SESSION SET SKIP_UNUSABLE_INDEXES = TRUE; --disables error reporting of indexes and index partitions marked UNUSABLE
-ALTER INDEX idx_cs_concept_code UNUSABLE;
-ALTER INDEX idx_cs_concept_id UNUSABLE;
-ALTER INDEX idx_concept_code_1 UNUSABLE;
-ALTER INDEX idx_concept_code_2 UNUSABLE;
 
---3. Load into concept_stage from rxxxref
+--3. Load into concept_stage from ndw_v_product
 
 INSERT /*+ APPEND */ INTO  concept_stage (concept_name,
                            domain_id,
@@ -47,22 +42,24 @@ INSERT /*+ APPEND */ INTO  concept_stage (concept_name,
                            valid_start_date,
                            valid_end_date,
                            invalid_reason)
-   SELECT gpi_desc AS concept_name,
-          'Drug' AS domain_id,
-          'GPI' AS vocabulary_id,
-          'GPI' AS concept_class_id,
-          NULL AS standard_concept,
-          gpi AS concept_code,
-          (SELECT latest_update
-             FROM vocabulary
-            WHERE vocabulary_id = 'GPI')
-             AS valid_start_date,
-          TO_DATE ('20991231', 'yyyymmdd') AS valid_end_date,
-          NULL AS invalid_reason
-     FROM ndw_v_product WHERE gpi IS NOT NULL;
+     SELECT MAX (gpi_desc) AS concept_name,
+            'Drug' AS domain_id,
+            'GPI' AS vocabulary_id,
+            'GPI' AS concept_class_id,
+            NULL AS standard_concept,
+            gpi AS concept_code,
+            (SELECT latest_update
+               FROM vocabulary
+              WHERE vocabulary_id = 'GPI')
+               AS valid_start_date,
+            TO_DATE ('20991231', 'yyyymmdd') AS valid_end_date,
+            NULL AS invalid_reason
+       FROM ndw_v_product
+      WHERE gpi IS NOT NULL
+   GROUP BY gpi;
 COMMIT;					  
 
---4 Load into concept_relationship_stage name from rxxxref
+--4 Load into concept_relationship_stage name from ndw_v_product
 INSERT /*+ APPEND */ INTO concept_relationship_stage (concept_code_1,
                                         concept_code_2,
                                         relationship_id,
@@ -122,7 +119,25 @@ where exists (select 1 from clean_class where gpi=cc.gpi and concept_class_id='C
 
 COMMIT;
 
---5. Add synonyms
+--6. Deprecate 'Maps to' mappings to deprecated and upgraded concepts
+BEGIN
+   DEVV5.VOCABULARY_PACK.DeprecateWrongMAPSTO;
+END;
+COMMIT;
+
+--7. Add mapping from deprecated to fresh concepts
+BEGIN
+   DEVV5.VOCABULARY_PACK.AddFreshMAPSTO;
+END;
+COMMIT;
+
+--8. Delete ambiguous 'Maps to' mappings
+BEGIN
+   DEVV5.VOCABULARY_PACK.DeleteAmbiguousMAPSTO;
+END;
+COMMIT;
+
+--9. Add synonyms
 INSERT INTO concept_synonym_stage (synonym_concept_id,
                                    synonym_concept_code,
                                    synonym_name,
@@ -141,17 +156,5 @@ INSERT INTO concept_synonym_stage (synonym_concept_id,
             WHERE gn.gpi_code = cs.concept_code)
     WHERE TRIM (concept_name) IS NOT NULL;
 COMMIT;
-
---6. Update concept_id in concept_stage from concept for existing concepts
-UPDATE concept_stage cs
-    SET cs.concept_id=(SELECT c.concept_id FROM concept c WHERE c.concept_code=cs.concept_code AND c.vocabulary_id=cs.vocabulary_id)
-    WHERE cs.concept_id IS NULL;
-
-
---7. Reinstate constraints and indices
-ALTER INDEX idx_cs_concept_code REBUILD NOLOGGING;
-ALTER INDEX idx_cs_concept_id REBUILD NOLOGGING;
-ALTER INDEX idx_concept_code_1 REBUILD NOLOGGING;
-ALTER INDEX idx_concept_code_2 REBUILD NOLOGGING;
 
 -- At the end, the three tables concept_stage, concept_relationship_stage and concept_synonym_stage should be ready to be fed into the generic_update.sql script		

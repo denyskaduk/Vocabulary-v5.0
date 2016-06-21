@@ -80,6 +80,20 @@ CREATE TABLE concept_relationship_stage
 NOLOGGING
 ;
 
+CREATE TABLE CONCEPT_RELATIONSHIP_MANUAL
+(
+   CONCEPT_CODE_1     VARCHAR2 (50 BYTE) NOT NULL,
+   CONCEPT_CODE_2     VARCHAR2 (50 BYTE) NOT NULL,
+   VOCABULARY_ID_1    VARCHAR (20) NOT NULL,
+   VOCABULARY_ID_2    VARCHAR (20) NOT NULL,
+   RELATIONSHIP_ID    VARCHAR2 (20 BYTE) NOT NULL,
+   VALID_START_DATE   DATE NOT NULL,
+   VALID_END_DATE     DATE NOT NULL,
+   INVALID_REASON     VARCHAR2 (1 BYTE)
+)
+NOLOGGING
+;
+
 CREATE TABLE concept_synonym_stage
 (
   SYNONYM_CONCEPT_ID   NUMBER,
@@ -156,6 +170,7 @@ ALTER TABLE concept_relationship ADD CONSTRAINT fpk_concept_relationship_id FORE
 ALTER TABLE relationship ADD CONSTRAINT fpk_relationship_concept FOREIGN KEY (relationship_concept_id) REFERENCES concept (concept_id) ENABLE NOVALIDATE;
 ALTER TABLE relationship ADD CONSTRAINT fpk_relationship_reverse FOREIGN KEY (reverse_relationship_id) REFERENCES relationship (relationship_id) ENABLE NOVALIDATE;
 ALTER TABLE concept_synonym ADD CONSTRAINT fpk_concept_synonym_concept FOREIGN KEY (concept_id) REFERENCES concept (concept_id) ENABLE NOVALIDATE;
+ALTER TABLE concept_synonym ADD CONSTRAINT unique_synonyms UNIQUE (concept_id,concept_synonym_name,language_concept_id);
 ALTER TABLE source_to_concept_map ADD CONSTRAINT fpk_source_to_concept_map_v_1 FOREIGN KEY (source_vocabulary_id) REFERENCES vocabulary (vocabulary_id) ENABLE NOVALIDATE;
 ALTER TABLE source_to_concept_map ADD CONSTRAINT fpk_source_to_concept_map_v_2 FOREIGN KEY (target_vocabulary_id) REFERENCES vocabulary (vocabulary_id) ENABLE NOVALIDATE;
 ALTER TABLE source_to_concept_map ADD CONSTRAINT fpk_source_to_concept_map_c_1 FOREIGN KEY (target_concept_id) REFERENCES concept (concept_id) ENABLE NOVALIDATE;

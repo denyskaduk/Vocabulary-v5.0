@@ -330,7 +330,11 @@ FROM (
           end
         when 'Cohort' then 0
         when 'ICD10' then 0
-        when 'ICD10PCS' then 0
+        when 'ICD10PCS' then
+          case 
+            when c.standard_concept is null then 0
+            else 1
+          end		
         when 'MDC' then 
           case 
             when c.standard_concept is null then 0
@@ -373,7 +377,8 @@ FROM (
                 else 0
               end
         end		
-        else -- flat list
+        when 'NFC' then 4
+		else -- flat list
           case
             when c.standard_concept is null then 0
             else 1
