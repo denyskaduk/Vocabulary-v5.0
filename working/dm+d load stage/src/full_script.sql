@@ -45,28 +45,7 @@ select CONCEPT_CODE_2, CONCEPT_name_2 from ingred_to_ingred_FINAL_BY_Lena where 
 
 --Non drug definition - several steps including different criteria for non-drug definition	
 --BASED ON NAMES, AND absence of form info
-drop table clnical_non_drug;
-create table clnical_non_drug as
-select * from drug_concept_stage where (concept_code not in (select concept_code_1 from clin_dr_to_dose_form where concept_code_1 is not null)  and invalid_reason is  null
-or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva', 'i')
-or DOMAIN_ID ='Device'
-) and concept_class_id = 'Clinical Drug'
-;
---ADD MANUALLY DEFINED NON DRUG CONCEPTS
-insert into clnical_non_drug (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID)
-select distinct  a.* from drug_concept_stage a 
-join (select cast (drug_code as varchar (250)) as drug_code  from non_drug --!!!MANUAL TABLE 
- union select concept_code from non_drug_2 --!!!MANUAL TABLE
- ) n
- on n.drug_code= a.concept_code
- ;
- insert into clnical_non_drug  (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID)
- select * from drug_concept_stage where concept_code= '5015311000001107'
-  ;
- DELETE FROM clnical_non_drug WHERE CONCEPT_CODE IN 
- (SELECT DRUG_CONCEPT_CODE FROM nondrug_with_ingr --!!! MANUAL TABLE 
- )
- ;
+
  --all branded drugs to clical drugs
 drop table Branded_to_clinical;
 create table Branded_to_clinical as (
@@ -327,7 +306,30 @@ INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_COD
 INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP28',  'Codeine / Paracetamol tablets',  '385055001',  'Tablet');
 INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP29',  'Aprotinin / Fibrinogen / Factor XIII solution',  '385219001',  'Solution for injection');
 ;   
--- add manual table
+--define non-drugs, clinical part of 
+drop table clnical_non_drug;
+create table clnical_non_drug as
+select * from drug_concept_stage where (concept_code not in (select concept_code_1 from clin_dr_to_dose_form where concept_code_1 is not null)  and invalid_reason is  null
+or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva', 'i')
+or DOMAIN_ID ='Device'
+) and concept_class_id = 'Clinical Drug'
+;
+--ADD MANUALLY DEFINED NON DRUG CONCEPTS
+insert into clnical_non_drug (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID)
+select distinct  a.* from drug_concept_stage a 
+join (select cast (drug_code as varchar (250)) as drug_code  from non_drug --!!!MANUAL TABLE 
+ union select concept_code from non_drug_2 --!!!MANUAL TABLE
+ ) n
+ on n.drug_code= a.concept_code
+ ;
+ insert into clnical_non_drug  (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID)
+ select * from drug_concept_stage where concept_code= '5015311000001107'
+  ;
+ DELETE FROM clnical_non_drug WHERE CONCEPT_CODE IN 
+ (SELECT DRUG_CONCEPT_CODE FROM nondrug_with_ingr --!!! MANUAL TABLE 
+ )
+ ;
+-- add manual table excluding non-drugs
 drop table CLIN_DR_TO_DOSE_form_2;
 create table CLIN_DR_TO_DOSE_form_2 as 
 select * from (
@@ -591,7 +593,22 @@ as denominator_unit,
 concept_code, concept_name, DOSAGE, DRUG_COMP, INGREDIENT_CONCEPT_CODE, INGREDIENT_CONCEPT_NAME
 from ds_all_tmp 
 ;
+-- update denominator with existing value for concepts having empty and non-emty denominator value/unit
+update ds_all a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )= 
+(select b.DENOMINATOR_VALUE, b.DENOMINATOR_unit  from 
+ ds_all b where a.CONCEPT_CODE = b.CONCEPT_CODE 
+ and a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null )
+ where exists 
+ (select 1 from 
+ ds_all b where a.CONCEPT_CODE = b.CONCEPT_CODE 
+ and a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null )
 --select * from ds_all where coalesce (AMOUNT_VALUE, DENOMINATOR_VALUE, NUMERATOR_VALUE) is null
+;
+update ds_all set amount_value = null, amount_unit = null where regexp_like (concept_name, '[[:digit:]\.]+(litre|ml)') and not regexp_like (concept_name, '/[[:digit:]\.]+(litre|ml)') and amount_value is not null and AMOUNT_UNIT in ('litre', 'ml');
+
+update ds_all set denominator_value = regexp_substr (regexp_substr(concept_name, ' [[:digit:]\.]+(litre(s?)|ml)') , '[[:digit:]\.]+'), denominator_unit = regexp_substr (regexp_substr(concept_name, ' [[:digit:]\.]+(litre(s?)|ml)') , '(litre(s?)|ml)')
+where regexp_like (concept_name, '\d+(litre(s?)|ml)') and not regexp_like (concept_name, '/[[:digit:]\.]+(litre(s?)|ml)')
+and denominator_value is  null
 ;
 --recalculate ds_stage accordong to fake denominators
 update ds_all a
@@ -738,7 +755,7 @@ from
 select DRUG_CODE, CONCEPT_CODE_2, DOSAGE, '' as volume from ds_omop_0 where DRUG_COMP  like '%'||CONCEPT_NAME_2||'%')
 )
 ;
--- update denominator with existing value for concepts having emty and non-emty denominator value/unit
+-- update denominator with existing value for concepts having empty and non-emty denominator value/unit
 update ds_stage a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )= 
 (select b.DENOMINATOR_VALUE, b.DENOMINATOR_unit  from 
  ds_stage b where a.drug_concept_code = b.drug_concept_code 
@@ -1106,7 +1123,9 @@ drop table drug_concept_stage
 create table drug_concept_stage as select * from
 drug_concept_stage_existing
 ;
-update drug_concept_stage set domain_id = 'Device' where concept_code in (select concept_code from non_drug_full) and concept_code in ('3378311000001103','3378411000001105')
+update drug_concept_stage set domain_id = 'Device' where concept_code in (select concept_code from non_drug_full)
+;
+update drug_concept_stage set domain_id = 'Device' where concept_code in ('3378311000001103','3378411000001105')
 ;
 update drug_concept_stage set domain_id = 'Drug' where concept_code not in (select concept_code from non_drug_full)
 ;
@@ -1157,7 +1176,7 @@ set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
 commit;
 
 drop sequence new_vocab;
- create sequence new_vocab increment by 1 start with 100 nocycle cache 20 noorder;
+ create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder;
 drop table name_replace;
  create table name_replace as 
  select 'OMOP'||new_vocab.nextval as concept_code, concept_name from (
@@ -1215,5 +1234,27 @@ FROM RELATIONSHIP_TO_CONCEPT
 WHERE CONCEPT_CODE_1 = '278910002'
 AND   CONCEPT_ID_2 = 1352213
 AND   PRECEDENCE IS NULL;
-
+--1
+update ds_stage b
+set box_size = (select regexp_substr (regexp_substr (concept_name, '\d+ ampoule'), '\d+') from drug_concept_Stage a where a.concept_code = b.drug_concept_code and regexp_like (concept_name, '\d+ ampoule') and box_size is  null)
+where exists (select 1 from drug_concept_Stage a where a.concept_code = b.drug_concept_code and regexp_like (concept_name, '\d+ ampoule') and box_size is null)
+and box_size is  null
+;
 commit;
+
+select * from ds_stage a  
+join ds_stage b on a.drug_concept_code = b.drug_concept_code and a.ingredient_concept_code = b.ingredient_concept_code
+and a.denominator_valu is null and 
+;
+delete from ds_stage where 
+;
+/*
+select * from drug_strength_stage a 
+join concept_stage b on a.DRUG_CONCEPT_CODE = b.concept_code
+left join ds_stage ds_all on ds_all.DRUG_CONCEPT_CODE= a.DRUG_CONCEPT_CODE
+ where a.AMOUNT_VALUE is null  and a.AMOUNT_UNIT_CONCEPT_ID is not null
+;
+select * from complete_concept_stage where concept_code ='20113611000001102'
+;
+select * from ds_combo  where COMBO_CODE ='7660'
+*/
