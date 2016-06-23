@@ -1096,6 +1096,7 @@ create table clinical_to_atc as
 join concept c on a.concept_code = c.concept_code and c.vocabulary_id = 'SNOMED' 
  join concept_relationship r on r.concept_id_1 = c.concept_id 
  join concept d on r.concept_id_2 = d.concept_id and d.vocabulary_id = 'ATC'
+ where a.concept_class_id like '%Drug%'
 ;
 drop table clinical_to_atc_2;
 create table clinical_to_atc_2 as 
@@ -1103,7 +1104,6 @@ select distinct a.concept_code_1, a.concept_name_1,  b.concept_id_2, b.concept_n
 join clinical_to_atc b on a.concept_code_2  = b.concept_code_1
 union 
 select * from clinical_to_atc
-
 ;
 drop table clinical_to_atc_full ;
 create table clinical_to_atc_full as 
@@ -1241,12 +1241,13 @@ where exists (select 1 from drug_concept_Stage a where a.concept_code = b.drug_c
 and box_size is  null
 ;
 commit;
-
+/*
 select * from ds_stage a  
 join ds_stage b on a.drug_concept_code = b.drug_concept_code and a.ingredient_concept_code = b.ingredient_concept_code
 and a.denominator_valu is null and 
 ;
-delete from ds_stage where 
+*/
+delete from ds_stage where numerator_value is null and amount_value is null
 ;
 /*
 select * from drug_strength_stage a 
@@ -1258,3 +1259,22 @@ select * from complete_concept_stage where concept_code ='20113611000001102'
 ;
 select * from ds_combo  where COMBO_CODE ='7660'
 */
+;
+update ds_stage a
+set AMOUNT_UNIT = null, AMOUNT_VALUE = null, NUMERATOR_VALUE = AMOUNT_VALUE, NUMERATOR_UNIT = AMOUNT_UNIT
+ where amount_value is not null and denominator_value is not null
+ ;
+ UPDATE DS_STAGE
+   SET NUMERATOR_UNIT = 'ml'
+WHERE DRUG_CONCEPT_CODE = '8055111000001105'
+AND   INGREDIENT_CONCEPT_CODE = '10569311000001100';
+UPDATE DS_STAGE
+   SET NUMERATOR_UNIT = 'ml'
+WHERE DRUG_CONCEPT_CODE = '14779411000001100'
+AND   INGREDIENT_CONCEPT_CODE = '80582002';
+
+delete from ds_stage a
+where numerator_UNIT is null and numerator_value is not null
+;
+commit
+;

@@ -2062,6 +2062,9 @@ drop sequence new_vocab2 ;
     where 
      a.concept_code_2 = b.concept_code and b.invalid_reason is not null )
      ;
+     delete from concept_relationship_stage where concept_code_2 =' '
+     ;
+     
      --+++ RxE
      drop table concept_stage_no_RxE;
    create table concept_stage_no_RxE as (select * from concept_stage)
@@ -2072,4 +2075,17 @@ drop sequence new_vocab2 ;
 commit;
 
 --select * from drug_strength_stage where drug_concept_code='OMOP274793';
-
+--reverse
+drop table concept_relationship_stage 
+;
+create table concept_relationship_stage as select * from concept_rel_stage_no_RxE
+;
+drop table concept_stage
+;
+create table concept_stage as select distinct * from concept_stage_no_RxE
+;
+select * from concept_stage b left join drug_strength_stage a on a.drug_concept_code = b.concept_code
+where a.drug_concept_code is null
+and b.concept_class_id ='Clinical Drug Form' and b.invalid_reason is null and b.domain_id ='Drug'
+;
+--all problem is in RxE defenition
