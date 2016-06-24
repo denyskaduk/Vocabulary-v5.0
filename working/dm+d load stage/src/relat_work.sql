@@ -8,7 +8,7 @@ COMMIT;
 BEGIN
    DEVV5.VOCABULARY_PACK.DeprecateWrongMAPSTO;
 END;
-COMMIT;
+COMMIT;   
 
 --xx3 Add mapping from deprecated to fresh concepts
   BEGIN

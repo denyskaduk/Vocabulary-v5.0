@@ -1476,7 +1476,7 @@
       null as invalid_reason
     from complete_concept_stage ccs
     join concept_stage cs on cs.concept_code=ccs.concept_code
-    where ccs.dose_form_code is not null AND ccs.mf_code is null;
+    where ccs.dose_form_code is not null AND ccs.mf_code =' ';
 
     commit;
 
@@ -1822,8 +1822,8 @@
     ;
 
     commit;
-drop sequence new_vocab2 ;
-   create sequence new_vocab2 increment by 1 start with 252851 nocycle cache 20 noorder;
+--drop sequence new_vocab2 ;  --this is restricted!!! several times we rebuild previous tables
+  -- create sequence new_vocab2 increment by 1 start with 252851 nocycle cache 20 noorder;
     -- generate OMOP codes for new concepts
     insert into xxx_replace
     select concept_code as xxx_code, 'OMOP'||new_vocab2.nextval as omop_code
@@ -1927,11 +1927,12 @@ drop sequence new_vocab2 ;
     set concept_class_id = 'Clinical Pack' where  a.concept_class_id = 'Drug Pack'
     ;
     commit;
-
+/*
     select count (CONCEPT_CODE_1) from (
     select CONCEPT_CODE_1 from concept_relationship_stage
     group by CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON having count (1) >1
     )
+    */
     ;
     --all updated concepts
     insert into concept_relationship_stage (CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
@@ -1983,6 +1984,8 @@ drop sequence new_vocab2 ;
     create table concept_relationship_stage as select distinct * from concept_relationship_stage_tmp;
     drop table concept_relationship_stage_tmp purge;
     ;
+    CREATE INDEX idx_concept_code_1 ON concept_relationship_stage (concept_code_1);
+CREATE INDEX idx_concept_code_2 ON concept_relationship_stage (concept_code_2);
     commit
     ;
     drop table crs_delete;
@@ -2064,28 +2067,123 @@ drop sequence new_vocab2 ;
      ;
      delete from concept_relationship_stage where concept_code_2 =' '
      ;
-     
+       delete  from concept_relationship_stage where concept_code_2 like 'XXX%'
+       ;
      --+++ RxE
      drop table concept_stage_no_RxE;
-   create table concept_stage_no_RxE as (select * from concept_stage)
+   create table concept_stage_no_RxE as (select distinct *from concept_stage)
    ;
      drop table concept_rel_stage_no_RxE;
    create table concept_rel_stage_no_RxE as (select * from concept_relationship_stage)
    ;
+   drop table drug_strength_st_no_RxE;
+   create table drug_strength_st_no_RxE as (select * from drug_strength_stage);
 commit;
 
 --select * from drug_strength_stage where drug_concept_code='OMOP274793';
 --reverse
+/*
 drop table concept_relationship_stage 
 ;
-create table concept_relationship_stage as select * from concept_rel_stage_no_RxE
+create table concept_relationship_stage as select distinct * from concept_rel_stage_no_RxE
 ;
 drop table concept_stage
 ;
 create table concept_stage as select distinct * from concept_stage_no_RxE
 ;
-select * from concept_stage b left join drug_strength_stage a on a.drug_concept_code = b.concept_code
-where a.drug_concept_code is null
-and b.concept_class_id ='Clinical Drug Form' and b.invalid_reason is null and b.domain_id ='Drug'
+select count(*) from concept_stage b 
+left join drug_strength_stage a on a.drug_concept_code = b.concept_code
+ --join concept_relationship_stage e on b.concept_code = e.concept_code_1 and e.vocabulary_id_2 = 'RxNorm'
+--where a.drug_concept_code is null
+where b.concept_class_id ='Branded Drug Box' and b.invalid_reason is null and b.domain_id ='Drug'
+and a.drug_concept_code is null
 ;
---all problem is in RxE defenition
+--all problem was in RxE defenition
+delete from drug_strength_stage where drug_concept_code in (select concept_code_1 from concept_relationship_stage where vocabulary_id_2 = 'RxNorm' and relationship_id = 'Maps to')
+;
+delete from drug_strength_stage where drug_concept_code in (select concept_code_1 from concept_relationship_stage where vocabulary_id_2 = 'RxNorm Extension' and relationship_id = 'Maps to')
+;
+/*
+--?????? ? dm+d ??? ??? ???????
+--??? ?????? ?????? ???? Maps to
+delete from concept_relationship_stage where concept_code_1 in (select concept_code_1 from concept_relationship_stage where vocabulary_id_2 like 'RxNorm%' and relationship_id = 'Maps to')
+and relationship_id !='Maps to'
+;
+select * from concept_relationship_stage a
+left join drug_strength_stage b on a.concept_code_2 = b.drug_concept_code
+join drug_strength_stage c on a.concept_code_1 = c.drug_concept_code
+ where a.vocabulary_id_2 = 'RxNorm Extension' and relationship_id = 'Maps to'
+and b.drug_concept_code is null
+;
+--maps to
+select * from concept_relationship_stage a
+left join concept_relationship_stage b on a.concept_code_2 = b.concept_code_1
+join concept_relationship_stage c on a.concept_code_1 = c.concept_code_1
+ where a.vocabulary_id_2 = 'RxNorm Extension' and a.relationship_id = 'Maps to'
+and b.concept_code_1 is null and a.relationship_id !='Maps to'
+;
+select * from drug_concept_stage where concept_code = 'OMOP251659'
+;
+select * from concept where concept_code ='370754'
+;
+UPDATE CONCEPT_RELATIONSHIP_STAGE
+   SET VOCABULARY_ID_2 = 'dm+d'
+WHERE CONCEPT_CODE_2 = 'OMOP251659'
+;
+UPDATE CONCEPT_STAGE
+   SET VOCABULARY_ID = 'dm+d'
+WHERE CONCEPT_CODE = 'OMOP251659';
+;
+select b.concept_name, c.concept_name, a.* from drug_strength_stage a
+join concept_stage b on a.drug_concept_code = b.concept_code
+join concept c on a.INGREDIENT_CONCEPT_CODE = c.concept_code and c.vocabulary_id ='RxNorm'
+;
+select * from drug_strength_stage where vocabulary_id_1 ='dm+d'
+;
+select * from concept_relationship_STAGE where concept_CODE_1 = '5370411000001103'
+;
+SELECT * FROM CONCEPT_STAGE WHERE CONCEPT_CODE ='5370411000001103'
+;
+select * from concept_relationship_stage a
+join concept_stage b on a.concept_code_2 = b.concept_code
+and b.invalid_reason is not null
+;
+delete  from concept_relationship_stage r
+where exists (select 1 from 
+ concept_stage cs where r.concept_code_2 = cs.concept_code
+ and concept_code_1 in (
+select concept_code_1 from concept_relationship_stage where relationship_id = 'Concept replaced by'
+group by concept_code_1 having count (1) > 1)
+)
+and relationship_id = 'Concept replaced by'
+and vocabulary_id_2 = 'dm+d'
+ 
+;
+select * from concept_relationship_stage r where concept_code_1 in (
+select concept_code_1 from concept_relationship_stage where relationship_id = 'Concept replaced by'
+group by concept_code_1 having count (1) > 1)
+;
+DELETE
+FROM CONCEPT_RELATIONSHIP_STAGE
+WHERE CONCEPT_CODE_1 = '320261001'
+AND   CONCEPT_CODE_2 = 'OMOP962440';
+DELETE
+FROM CONCEPT_RELATIONSHIP_STAGE
+WHERE CONCEPT_CODE_1 = '10032511000001109'
+AND   CONCEPT_CODE_2 = 'OMOP789862';
+
+;
+delete from concept_relationship_Stage a
+where exists (select 1 from concept_stage b where a.concept_code_2 = b.concept_code and b.invalid_reason is not null)
+;
+commit
+;
+select * from concept_relationship_stage where vocabulary_id_2 ='dm+d'
+;
+select count (*) from concept_relationship_stage a
+join xxx_replace b on a.CONCEPT_CODE_2 = b.XXX_CODE
+where concept_code_2 like 'XXX%'
+;
+--fix manually
+*/
+

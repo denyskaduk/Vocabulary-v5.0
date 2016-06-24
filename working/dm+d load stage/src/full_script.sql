@@ -24,7 +24,7 @@ WbImport -file=C:/mappings/DM+D/Ingred_Lena_review.txt
          -quoteCharEscaping=none
          -ignoreIdentityColumns=false
          -deleteTarget=false
-         -continueOnError=false
+         -continueOnError=false`
          -batchSize=1000;
 
 ;
@@ -46,7 +46,7 @@ select CONCEPT_CODE_2, CONCEPT_name_2 from ingred_to_ingred_FINAL_BY_Lena where 
 --Non drug definition - several steps including different criteria for non-drug definition	
 --BASED ON NAMES, AND absence of form info
 
- --all branded drugs to clical drugs
+ --all branded drugs to clical drugs, then use in ds_stage, because ds_stage...
 drop table Branded_to_clinical;
 create table Branded_to_clinical as (
   select distinct a.concept_code as concept_code_1, a.concept_name as concept_name_1, cs.concept_code as concept_code_2, cs.concept_name as  concept_name_2 from drug_concept_stage  a
@@ -82,9 +82,11 @@ join concept c on a.concept_code = c.concept_code and c.vocabulary_id = 'SNOMED'
  join concept_relationship r on r.concept_id_1 = c.concept_id 
  join concept d on r.concept_id_2 = d.concept_id and d.vocabulary_id = 'SNOMED'
 join drug_concept_stage cs on cs.concept_code  = d.concept_code and a.insert_id = 14  and cs.insert_id =14 and a.concept_code != cs.concept_code where RELATIONSHIP_ID ='Is a' and not regexp_like (a.concept_name, 'bandage|dressing'))
-group by concept_code_1 having count (1) >1 union select '9149411000001109' from dual ) x on x.concept_code_1 = a.concept_code
+group by concept_code_1 having count (1) >1 union select '9149411000001109' --one who have 1 component but still is a pack
+from dual ) x on x.concept_code_1 = a.concept_code
 ;
---but we still have to create packs for clinical Drugs
+--but we still have to create packs for clinical Drugs, 
+--another condition for pack definition
 drop table DR_TO_CLIN_DR_BOX;
 create table DR_TO_CLIN_DR_BOX as
   select distinct a.concept_code, a.concept_name,a.concept_class_id, a.invalid_reason, /*cs.concept_code, cs.concept_name, cs.concept_class_id, 
@@ -192,6 +194,7 @@ and amount_value is null and amount_unit is null and box_size is null
 and CONCEPT_CODE_1 not in (select concept_code_1 from 
 DR_pack_TO_CLIN_DR_BOX_full)
 ;
+--need to comment
 UPDATE BOX_TO_DRUG    SET AMOUNT_UNIT = 'ml',       AMOUNT_VALUE = 4,       BOX_SIZE = 56
 WHERE CONCEPT_CODE_1 = '14791211000001106'
 AND   CONCEPT_CODE_2 = '14791111000001100';
@@ -236,6 +239,7 @@ UPDATE BOX_TO_DRUG
 WHERE CONCEPT_CODE_1 = '5186011000001106'
 AND   CONCEPT_CODE_2 = '5185911000001103';
 
+--special pattern for Drug Pack, need to add examples showing why I do this
 update box_to_drug
 set BOX_SIZE = regexp_substr( regexp_substr (BOX_AMOUNT, '\d+ x \('), '\d')
 where concept_code_1
@@ -329,7 +333,7 @@ join (select cast (drug_code as varchar (250)) as drug_code  from non_drug --!!!
  (SELECT DRUG_CONCEPT_CODE FROM nondrug_with_ingr --!!! MANUAL TABLE 
  )
  ;
--- add manual table excluding non-drugs
+-- add manual table excluding non-drugs???
 drop table CLIN_DR_TO_DOSE_form_2;
 create table CLIN_DR_TO_DOSE_form_2 as 
 select * from (
@@ -360,6 +364,7 @@ select * from CLIN_DR_TO_DOSE_form_3
 --remove 'Not applicable' forms
 delete from DR_TO_DOSE_form_full where concept_code_2 = '3097611000001100'
 ;
+--???
 --Manufacturer
 --just take it from names long executing part, don't rerun next time
 /*
@@ -389,7 +394,8 @@ drop table Clinical_to_Ingred_tmp ;
 create table Clinical_to_Ingred_tmp as 
 select distinct a.CONCEPT_CODE_1, a.CONCEPT_NAME_1, coalesce (b.CONCEPT_CODE_2, a.CONCEPT_CODE_2) as CONCEPT_CODE_2  , coalesce (b.CONCEPT_NAME_2, a.CONCEPT_NAME_2) as CONCEPT_NAME_2, coalesce (b.INSERT_ID_2, a.INSERT_ID) as INSERT_ID_2
 from Clinical_to_Ingred a 
-join ingred_to_ingred_FINAL_BY_Lena b on a.concept_code_2 = b.CONCEPT_CODE_1
+join ingred_to_ingred_FINAL_BY_Lena --!!!
+ b on a.concept_code_2 = b.CONCEPT_CODE_1
 ;
 --another variant with narrower definition - use only  r.relationship_id  in ('Is a')
 drop table Clinical_to_Ingred_Is_a;
@@ -451,6 +457,7 @@ select concept_code_1 from Clinical_to_Ingred_tmp group by concept_code_1 having
 and a.ingr_cnt  = 1 
 ;
 --count is equal and drug_component contains ingredient , exclude also concepts from previous table
+--recheck in future about complicated dosages
 drop table  clin_dr_to_ingr_two;
 create table  clin_dr_to_ingr_two as 
 select distinct a.*, concept_code_2 as ingredient_concept_code, concept_name_2 as ingredient_concept_name, insert_id_2 
@@ -604,8 +611,9 @@ update ds_all a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )=
  and a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null )
 --select * from ds_all where coalesce (AMOUNT_VALUE, DENOMINATOR_VALUE, NUMERATOR_VALUE) is null
 ;
+--need to comment
 update ds_all set amount_value = null, amount_unit = null where regexp_like (concept_name, '[[:digit:]\.]+(litre|ml)') and not regexp_like (concept_name, '/[[:digit:]\.]+(litre|ml)') and amount_value is not null and AMOUNT_UNIT in ('litre', 'ml');
-
+-- need to commeny
 update ds_all set denominator_value = regexp_substr (regexp_substr(concept_name, ' [[:digit:]\.]+(litre(s?)|ml)') , '[[:digit:]\.]+'), denominator_unit = regexp_substr (regexp_substr(concept_name, ' [[:digit:]\.]+(litre(s?)|ml)') , '(litre(s?)|ml)')
 where regexp_like (concept_name, '\d+(litre(s?)|ml)') and not regexp_like (concept_name, '/[[:digit:]\.]+(litre(s?)|ml)')
 and denominator_value is  null
@@ -765,6 +773,7 @@ update ds_stage a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )=
  ds_stage b where a.drug_concept_code = b.drug_concept_code 
  and a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null )
  ;
+ --need to comment with example
  update ds_stage set ingredient_concept_code = 'OMOP28664' where ingredient_concept_code =  '798336'
 ;
 update ds_stage set ingredient_concept_code = 'OMOP28671' where ingredient_concept_code =  '902251'
@@ -828,9 +837,9 @@ from  dr_pack_to_Clin_dr_box_full a left join box_to_drug b on a.CONCEPT_CODE_2 
 ;
 --insert manual packs
 insert into pack_content_1 (PACK_CONCEPT_CODE,PACK_NAME,DRUG_CONCEPT_CODE,DRUG_CONCEPT_NAME,AMOUNT)
-select PACK_CODE,PACK_NAME,DRUG_CODE,DRUG_NEW_NAME,AMOUNT from PACK_DRUG_TO_CODE_2_2
+select PACK_CODE,PACK_NAME,DRUG_CODE,DRUG_NEW_NAME,AMOUNT from PACK_DRUG_TO_CODE_2_2 --!!!
 union
-select PACK_CODE,PACK_NAME,DRUG_CODE,DRUG_NAME,'' from PACK_DRUG_TO_CODE_1--table with pack components joined with dmd by pack component name;
+select PACK_CODE,PACK_NAME,DRUG_CODE,DRUG_NAME,'' from PACK_DRUG_TO_CODE_1--!!!--table with pack components joined with dmd by pack component name;
 ;
 insert into pack_content_1 (PACK_CONCEPT_CODE,PACK_NAME,DRUG_CONCEPT_CODE,DRUG_CONCEPT_NAME,AMOUNT)
 select distinct b.CONCEPT_CODE_1, b.CONCEPT_NAME_1, DRUG_CONCEPT_CODE,DRUG_CONCEPT_NAME,AMOUNT 
@@ -849,6 +858,7 @@ select PACK_CONCEPT_CODE,DRUG_CONCEPT_CODE,AMOUNT from pack_content_1
 CREATE TABLE PACK_CONTENT_TMP AS 
 SELECT DISTINCT * FROM PACK_CONTENT
 ;
+--delete duplicates
 DROP TABLE PACK_CONTENT
 ;
 CREATE TABLE PACK_CONTENT AS (SELECT * FROM PACK_CONTENT_TMP)
@@ -876,6 +886,7 @@ and relationship_id in ('Concept same_as to', 'Concept poss_eq to', 'Concept rep
 --delete from Packs deprecated concepts
 ;
 --Brand NAMES - some clinical Drugs also should considered as Branded (Generic and Co-%
+--need to review
 drop table branded_drug_to_brand_name;
 create table branded_drug_to_brand_name as 
 select distinct concept_code, concept_name,  
@@ -899,7 +910,21 @@ drug_concept_stage b where lower (a.BRAND_NAME) = lower (b.concept_name)
   delete  from branded_drug_to_brand_name a where exists (select 1 from
 non_drug_full b where b.concept_code = a.concept_code)
 ;
---add seq
+--Anna's update
+delete  branded_drug_to_brand_name where BRAND_NAME in 
+('Zinc compound paste'	,'Yellow soft paraffin solid'	,'Wild cherry syrup'	,'White soft paraffin solid	','White liniment'	,'Vitamins A and D capsules BPC'	,'Vitamins'	,'Vitamin K2'	,'Vitamin E'	,'Vitamin D3'	,
+'Vitamin C','Tri-iodothyronine'	,'Trichloroacetic acid and Salicylic acid paste'	,'Tea Tree and Witch Hazel'	,'Surgical spirit'	,'Starch maize','St. James Balm','Squill opiate linctus paediatric'	,
+'Sodium DL-3-hydroxybutyrate'	,'Snake antivenin powder and solvent for'	,'SGK Glucosamine'	,'Sepia officinalis'	,'Ringer lactate'	,'Rhus toxicodendron'	,'Recombinant human hyaluronidase'	,'Pulsatilla pratensis'	,'Podophyllum'	,
+'Phenylalanine'	,'Passiflora incarnata'	,'Oxygen cylinders'	,'Oily phenol'	,'Levothyroxine sodium'	,'Ignatia amara'	,'Glucosamine Chondroitin Complex'	,'Gentamycin Augensalbe'	,'Gentamicin Intrathecal'	,'Gelsemium sempervirens'	,
+'Euphrasia officinalis'	,'Drosera rotundifolia','Dried Factor VIII Fraction type'	,'Carbostesin-adrenaline'	,'Calcium and Ergocalciferol'	,'Black currant syrup'	,'Avoca wart and verruca treatment set'	,'Avena sativa comp drops'	,
+'Arsenicum album'	,'Arginine hydrochloride'	,'Argentum nitricum'	,'Anise water concentrated'	,'Amyl nitrite vitrellae'	,'Amaranth solution'	,'Alpha-Lipoic Acid'	,'Actaea racemosa'	,'Aconitum napellus','8-Methoxypsoralen'	,
+'4-Aminopyridine'	,'3,4-Diaminopyridine')
+or regexp_like(brand_name, 'Zinc sulfate|Zinc and|Water|Vitamin B compound|Thymol|Sodium|Simple linctus|Ringers|Podophyllin|Phenol|Oxygen|Morphine|Medical|Dextran|Magnesium|Macrogol|Lipofundin|Kaolin|Kalium|Ipecacuanha|Iodine|Hypurin|Hypericum|Helium cylinders|Glycerin|Glucose|Gentian|Ferric chloride|E-D3|E45|Carbon dioxide cylinders|Bacillus Calmette-Guerin|Anticoagulant Citrate|Ammonia|Air cylinders|Ammonium chloride|Emulsifying|Ferrum|Carbomer')
+;
+update  branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'(sterile water inhalation solution|wort herb tincture|sugar free|oral powder|in Orabase|Intravenous|ear drops|rectal|facewash|concentrate for|suspension for injection|ear/eye/nose drops|I.V.)+');
+
+--add sequence
 drop sequence new_seq;
  create sequence new_seq increment by 1 start with 100 nocycle cache 20 noorder
  ;
@@ -925,7 +950,7 @@ select distinct drug_concept_code, ingredient_concept_code from ds_stage
 ;
 --Drug to Form
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
-select distinct concept_code_1, concept_code_2 from DR_TO_DOSE_form_full
+select distinct concept_code_1, concept_code_2 from DR_TO_DOSE_form_full where concept_code_1 not in (select PACK_CONCEPT_CODE from  PACK_CONTENT)
 ;
 --Drug to Brand Name 
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
@@ -1093,7 +1118,7 @@ create table clinical_to_atc as
  select --distinct a.concept_class_id
   a.concept_code as concept_code_1, a.concept_name as concept_name_1 , d.concept_id as concept_id_2, d.concept_name as concept_name_2
   from drug_concept_stage  a
-join concept c on a.concept_code = c.concept_code and c.vocabulary_id = 'SNOMED' 
+join concept c on a.concept_code = c.concept_code and c.vocabulary_id = 'SNOMED'  
  join concept_relationship r on r.concept_id_1 = c.concept_id 
  join concept d on r.concept_id_2 = d.concept_id and d.vocabulary_id = 'ATC'
  where a.concept_class_id like '%Drug%'
@@ -1176,7 +1201,7 @@ set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
 commit;
 
 drop sequence new_vocab;
- create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder;
+ create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder; -- change to procedure
 drop table name_replace;
  create table name_replace as 
  select 'OMOP'||new_vocab.nextval as concept_code, concept_name from (
@@ -1241,24 +1266,7 @@ where exists (select 1 from drug_concept_Stage a where a.concept_code = b.drug_c
 and box_size is  null
 ;
 commit;
-/*
-select * from ds_stage a  
-join ds_stage b on a.drug_concept_code = b.drug_concept_code and a.ingredient_concept_code = b.ingredient_concept_code
-and a.denominator_valu is null and 
-;
-*/
 delete from ds_stage where numerator_value is null and amount_value is null
-;
-/*
-select * from drug_strength_stage a 
-join concept_stage b on a.DRUG_CONCEPT_CODE = b.concept_code
-left join ds_stage ds_all on ds_all.DRUG_CONCEPT_CODE= a.DRUG_CONCEPT_CODE
- where a.AMOUNT_VALUE is null  and a.AMOUNT_UNIT_CONCEPT_ID is not null
-;
-select * from complete_concept_stage where concept_code ='20113611000001102'
-;
-select * from ds_combo  where COMBO_CODE ='7660'
-*/
 ;
 update ds_stage a
 set AMOUNT_UNIT = null, AMOUNT_VALUE = null, NUMERATOR_VALUE = AMOUNT_VALUE, NUMERATOR_UNIT = AMOUNT_UNIT
