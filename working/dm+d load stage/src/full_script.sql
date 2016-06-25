@@ -333,7 +333,7 @@ join (select cast (drug_code as varchar (250)) as drug_code  from non_drug --!!!
  (SELECT DRUG_CONCEPT_CODE FROM nondrug_with_ingr --!!! MANUAL TABLE 
  )
  ;
--- add manual table excluding non-drugs???
+-- add manual table "aut_form_mapped_noRx" excluding non-drugs
 drop table CLIN_DR_TO_DOSE_form_2;
 create table CLIN_DR_TO_DOSE_form_2 as 
 select * from (
@@ -809,7 +809,7 @@ select * from box_non_drug
 union 
 select * from cl_br_non_drug
 ;
---Box fixing including existing non-drug ???
+  --Box fixing including existing non-drug ???
 delete  from DR_pack_TO_CLIN_DR_BOX_full where CONCEPT_CODE_1 in (
 select CONCEPT_CODE_1  from DR_pack_TO_CLIN_DR_BOX_full where CONCEPT_CODE_1 in (select concept_code from non_drug_full) and  CONCEPT_CODE_2 in (select concept_code from non_drug_full)
 )
@@ -1068,7 +1068,6 @@ WbImport -file=C:/mappings/DM+D/brand_names_by_Lena.txt
          -deleteTarget=false
          -continueOnError=false;
          */
-
 ;
 drop table brand_name_map_full;
 create table brand_name_map_full as 
@@ -1266,7 +1265,11 @@ where exists (select 1 from drug_concept_Stage a where a.concept_code = b.drug_c
 and box_size is  null
 ;
 commit;
+--delete impossible combinations from ds_stage, treat these drugs as Clinical/Branded Drug Form
+--for now we make an analysis
+/*
 delete from ds_stage where numerator_value is null and amount_value is null
+*/
 ;
 update ds_stage a
 set AMOUNT_UNIT = null, AMOUNT_VALUE = null, NUMERATOR_VALUE = AMOUNT_VALUE, NUMERATOR_UNIT = AMOUNT_UNIT
@@ -1281,8 +1284,49 @@ UPDATE DS_STAGE
 WHERE DRUG_CONCEPT_CODE = '14779411000001100'
 AND   INGREDIENT_CONCEPT_CODE = '80582002';
 
+--delete impossible combinations from ds_stage, treat these drugs as Clinical/Branded Drug Form
+--for now we make an analysis
+
 delete from ds_stage a
 where numerator_UNIT is null and numerator_value is not null
+ ;
+select count (distinct drug_concept_code) from (
+select drug_concept_code from ds_stage a
+where amount_value is null and numerator_value is null and DENOMINATOR_VALUE is not null
+union 
+select drug_concept_code from ds_stage a
+where amount_value is null and numerator_value is  null and box_size is not null
+union
+select drug_concept_code from ds_stage a 
+join internal_relationship_stage b on a.drug_concept_code = b.concept_code_1 
+join drug_concept_stage c on c.concept_code = b.concept_code_2
+where amount_value is null and numerator_value is null
+and c.concept_class_id = 'Supplier'
+)
+;
+select distinct b.concept_name from ds_stage a
+join drug_concept_stage b on a.drug_concept_code = b.concept_code
+where  amount_value is null and numerator_value is null
+;
+commit
+;
+--set concept_classes to values given originaly by dm+d source
+update drug_concept_stage 
+set concept_class_id = 'Form' where insert_id in (3,4)
+;
+update drug_concept_stage  set concept_class_id = 'Ingredient' where insert_id in (7,8)
+;
+update drug_concept_stage  set concept_class_id = 'VTM' where insert_id in (9,10)
+;
+update drug_concept_stage  set concept_class_id = 'VMP' where insert_id in (11,12)
+;
+update drug_concept_stage  set concept_class_id = 'AMP' where insert_id in (13)
+;
+update drug_concept_stage  set concept_class_id = 'VMPP' where insert_id in (14)
+;
+update drug_concept_stage  set concept_class_id = 'AMPP' where insert_id in (15)
+;
+update drug_concept_stage  set concept_class_id = 'Supplier' where insert_id in (16)
 ;
 commit
 ;

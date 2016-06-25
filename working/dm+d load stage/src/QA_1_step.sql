@@ -213,3 +213,28 @@
    group by error_type
 
 
+;
+select ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier, count(*) from (
+select distinct d.concept_code, 
+  case when ds.concept_code is null then 0 else 1 end as supplier,
+  case when ddf.concept_code is null then 0 else 1 end as Dose_Form,
+   case when dbn.concept_code is null then 0 else 1 end as Brand_Name,
+     case when din.concept_code is null then 0 else 1 end as Ingredient,
+     case when dsq.drug_concept_code is null then 0 else 1 end as Quantity_factor,
+     case when dsq.drug_concept_code is null then 0 else 1 end as Drug_strength,
+     case when dsb.drug_concept_code is null then 0 else 1 end as Box_size
+from drug_concept_stage d
+left join internal_relationship_stage isp on isp.concept_code_1=d.concept_code
+left join drug_concept_stage ds on ds.concept_code=isp.concept_code_2 and ds.concept_class_id = 'Supplier'
+left join internal_relationship_stage idf on idf.concept_code_1=d.concept_code
+left join drug_concept_stage ddf on ddf.concept_code=idf.concept_code_2 and ddf.concept_class_id = 'Form'
+left join internal_relationship_stage ibn on ibn.concept_code_1=d.concept_code
+left join drug_concept_stage dbn on dbn.concept_code=ibn.concept_code_2 and dbn.concept_class_id = 'Brand Name'
+left join internal_relationship_stage iin on iin.concept_code_1=d.concept_code
+left join drug_concept_stage din on din.concept_code=iin.concept_code_2 and din.concept_class_id in ('Ingredient','VTM')
+left join ds_stage dsq on dsq.drug_concept_code=d.concept_code and dsq.denominator_value is not null
+left join ds_stage dsb on dsb.drug_concept_code=d.concept_code and dsq.box_size is not null
+left join ds_stage dsd on dsd.drug_concept_code=d.concept_code and ( dsd.denominator_value is not null or dsd.amount_value is not null)
+where d.concept_class_id in ('AMP', 'AMPP', 'VMP', 'VMPP') and d.domain_id='Drug' and d.invalid_reason is null
+) group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier;
+;
