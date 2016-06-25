@@ -293,7 +293,8 @@
       join df on df.concept_code=i.concept_code
       join bn on bn.concept_code=i.concept_code
       left join bs on bs.concept_code=i.concept_code 
-      where quant.concept_code is null and d.concept_code is null and bs.concept_code is null
+       left join manufact mf on mf.concept_code=i.concept_code
+      where quant.concept_code is null and d.concept_code is null and bs.concept_code is null and mf.mf_code is null
     union
     -- Clinical Drug Form
       select distinct 
@@ -305,7 +306,8 @@
       join df on df.concept_code=i.concept_code
       left join bn on bn.concept_code=i.concept_code
       left join bs on bs.concept_code=i.concept_code 
-      where quant.concept_code is null and d.concept_code is null and bn.concept_code is null and bs.concept_code is null
+ left join manufact mf on mf.concept_code=i.concept_code
+      where quant.concept_code is null and d.concept_code is null and bn.concept_code is null and bs.concept_code is null and mf.mf_code is null
     union
     -- Branded Drug Component
       select distinct 
@@ -317,7 +319,8 @@
       left join df on df.concept_code=i.concept_code
       join bn on bn.concept_code=i.concept_code
       left join bs on bs.concept_code=i.concept_code 
-      where quant.concept_code is null and df.concept_code is null and bs.concept_code is null
+       left join manufact mf on mf.concept_code=i.concept_code
+      where quant.concept_code is null and df.concept_code is null and bs.concept_code is null and mf.mf_code is null
     union
     -- Clinical Drug Component 
       select distinct 
@@ -329,7 +332,8 @@
       left join df on df.concept_code=i.concept_code
       left join bn on bn.concept_code=i.concept_code
       left join bs on bs.concept_code=i.concept_code 
-      where quant.concept_code is null and df.concept_code is null and bn.concept_code is null and bs.concept_code is null
+      left join manufact mf on mf.concept_code=i.concept_code
+      where quant.concept_code is null and df.concept_code is null and bn.concept_code is null and bs.concept_code is null and mf.mf_code is null
     ;
 
     -- 3. Write all concept classes, whether existing or not from all possible combinations
@@ -465,7 +469,8 @@
     )
     ;
 
-    -- Add Packs
+    -- Add Packs ???
+    --!!! define Classes properly, for non Marketed Products
     insert /*+ APPEND */ into complete_concept_stage
     select 
       dcs.concept_code,
@@ -489,7 +494,7 @@
       concept_code varchar2(50),
       nmf_code varchar2(50)
     );  
-
+--used logic of AMIS, change according to dm+d requirements
     insert /*+ APPEND */ into nmf_packs
     select 
      dcs.concept_code,
@@ -500,7 +505,7 @@
     where dcs.concept_class_id like '%Pack' and dcs.domain_id='Drug';
 
     commit;
-
+--used logic of AMIS, change according to dm+d requirements
     insert /*+ APPEND */ into complete_concept_stage
     select 
       nmf_code as concept_code,
@@ -679,6 +684,7 @@
     commit;
 
     -- Packs
+    --used logic of AMIS, change according to dm+d requirements
     insert /*+ APPEND */ into complete_name
     -- Get the component parts
     with c as (
@@ -874,6 +880,7 @@
     where r.invalid_reason is null 
     ;
     commit;
+--compare q and r using manufacturer, q_mf and r_mf need to buid!!!
 
     -- Create table that matches drugs q to r, based on Ingredient, Dose Form and Brand Name (if exist). Dose, box size or quantity are not yet compared
     --drop table q_to_r_anydose purge;
@@ -1167,6 +1174,9 @@
     ;
     commit;
 
+--!!! add     -- Write equivalents from q to r Supplier using the same logic
+
+
     -- Write maps from concept_stage to RxNorm as Maps to
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select 
@@ -1184,6 +1194,8 @@
     join concept c on c.concept_id=qr.r_did
     ;
     commit;
+    
+--comments???
 
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select distinct 
@@ -1199,6 +1211,9 @@
     where concept_class_id = 'Marketed Product';
     commit;
 
+-- build 'Marketed form of'
+--used logic of AMIS, change according to dm+d requirements!!!
+--only for packs here
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select distinct
       ccs1.concept_code as concept_code_1,
@@ -1212,6 +1227,9 @@
     from complete_concept_stage ccs1 JOIN nmf_packs nmf ON nmf.concept_code=ccs1.concept_code JOIN complete_concept_stage ccs2 ON ccs2.concept_code=nmf.nmf_code;
     commit;
 
+
+--build 'Marketed form of' for all concepts 
+--separately from all other relationships because of !!!
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select distinct
       ccs1.concept_code as concept_code_1,
@@ -1235,6 +1253,7 @@
     commit;
 
     -- write RxNorm-like relationships between concepts of all classes except Drug Forms and Clinical Drug Component based on matching components
+    
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     with rl as (
     -- Pull relationship_id between concept classes from existing RxNorm
@@ -1322,6 +1341,8 @@
     create index x_an on an(i_combo_code);
     commit;
     exec DBMS_STATS.GATHER_TABLE_STATS (ownname=> USER, tabname => 'complete_concept_stage', estimate_percent => null, degree =>4, cascade => true);
+
+
     -- Write RxNorm-like relationships for Clinical Drug Forms (matching ingredient combinations)
 
     create table rl as (
@@ -1335,7 +1356,7 @@
         and c1.concept_class_id = 'Clinical Drug Form'
     ) 
     ;
-
+--descendants???
     create table de as (
       select de.concept_code as de_code, de.concept_class_id as de_class_id,
         an.concept_code as an_code, an.concept_class_id as an_class_id, an.vocabulary_id as an_vocab_id
@@ -1423,6 +1444,7 @@
     commit;
 
     -- Write relationship between Drugs and Packs
+    --used logic of AMIS, change according to dm+d requirements!!!
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select 
       nmfp.nmf_code as concept_code_1,
@@ -1497,7 +1519,7 @@
     ;
     commit;
 
-    -- Write maps from drugs that didn't make it into complete_concept_stage but have drug strength (duplicates)
+    -- Write maps from drugs that didn't make it into complete_concept_stage but have drug strength (duplicates)--!!!
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select 
       e.concept_code as concept_code_1,
@@ -1518,7 +1540,7 @@
     ;
     commit;
 
-    -- Write missing drugs that never made it into complete_concept_stage but have drug_strength (duplicates)
+    -- Write missing drugs that never made it into complete_concept_stage but have drug_strength (duplicates)--!!!
     insert /*+ APPEND */ into concept_stage (concept_id, concept_name, domain_id, vocabulary_id, concept_class_id, standard_concept, concept_code, valid_start_date, valid_end_date, invalid_reason)
     select 
       null as concept_id, 
@@ -1627,7 +1649,7 @@
     ;
     commit;
 
-    -- Write relationship to drug classes
+    -- Write relationship to drug classes, relationship to ATC
     insert /*+ APPEND */ into concept_relationship_stage (concept_code_1, vocabulary_id_1, concept_code_2, vocabulary_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
     select 
       c1.concept_code as concept_code_1,
@@ -1642,7 +1664,9 @@
     join relationship_to_concept r on r.concept_code_1=c1.concept_code 
     join concept c2 on c2.concept_id=r.concept_id_2
     where c2.vocabulary_id in (select distinct vocabulary_id from concept where domain_id='Drug' and standard_concept='C')
-    and c1.concept_class_id in ('Branded Drug Box', 'Branded Drug Comp', 'Quant Clinical Drug', 'Branded Pack', 'Clinical Drug Box', 'Clinical Pack', 'Clinical Drug Form', 'Quant Branded Drug', 'Clinical Drug', 'Branded Drug Form', 'Quant Branded Box', 'Branded Drug', 'Clinical Drug Comp', 'Quant Clinical Box')
+    and c1.concept_class_id in 
+    ('Branded Drug Box', 'Branded Drug Comp', 'Quant Clinical Drug', 'Branded Pack', 'Clinical Drug Box', 'Clinical Pack', 'Clinical Drug Form', 'Quant Branded Drug',
+     'Clinical Drug', 'Branded Drug Form', 'Quant Branded Box', 'Branded Drug', 'Clinical Drug Comp', 'Quant Clinical Box', 'Marketed Product') --added 'Marketed Product'
     ;
     commit;
 
@@ -1822,7 +1846,8 @@
     ;
 
     commit;
---drop sequence new_vocab2 ;  --this is restricted!!! several times we rebuild previous tables
+   
+--drop sequence new_vocab2 ;  --this is restricted!!! several times we rebuild previous tables, sequence is defined separately
   -- create sequence new_vocab2 increment by 1 start with 252851 nocycle cache 20 noorder;
     -- generate OMOP codes for new concepts
     insert into xxx_replace
@@ -1918,7 +1943,7 @@
     ;
     commit;
 
-    --Packs fix
+    --Packs fix!!!
     update concept_stage a
     set concept_class_id = 'Branded Pack' where exists (select 1 from concept_relationship_stage z join concept_stage x on x.concept_code = z.concept_code_2 and x.concept_class_id = 'Brand Name' where z.concept_code_1 = a.concept_code)
     and a.concept_class_id = 'Drug Pack'
