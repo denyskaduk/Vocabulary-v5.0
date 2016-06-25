@@ -211,10 +211,18 @@
   select concept_code, 'Improper valid_start_date' from drug_concept_stage where valid_start_date >  SYSDATE
   ) a join drug_concept_stage b on a.concept_code = b.concept_code where b.invalid_reason is null and b.domain_id = 'Drug'  
    group by error_type
-
-
 ;
-select ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier, count(*) from (
+create idx_irs_code_1 on  internal_relationship_stage (concept_code_1 ASC);
+create idx_irs_code_2 on  internal_relationship_stage (concept_code_2 ASC);
+
+create idx_dds_code_1 on  ds_stage (drug_concept_code ASC);
+create idx_dss_code_2 on  internal_relationship_stage (ingredient_concept_code ASC);
+
+create idx_dcs_code on  Drug_concept_stage (concept_code ASC);
+
+commit
+;
+create table comb_check_tmp as 
 select distinct d.concept_code, 
   case when ds.concept_code is null then 0 else 1 end as supplier,
   case when ddf.concept_code is null then 0 else 1 end as Dose_Form,
@@ -236,5 +244,8 @@ left join ds_stage dsq on dsq.drug_concept_code=d.concept_code and dsq.denominat
 left join ds_stage dsb on dsb.drug_concept_code=d.concept_code and dsq.box_size is not null
 left join ds_stage dsd on dsd.drug_concept_code=d.concept_code and ( dsd.denominator_value is not null or dsd.amount_value is not null)
 where d.concept_class_id in ('AMP', 'AMPP', 'VMP', 'VMPP') and d.domain_id='Drug' and d.invalid_reason is null
-) group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier;
-;
+; 
+create table comb_check_tmp as 
+ select ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier, count(*) from comb_check_tmp 
+  group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier
+  ;
