@@ -212,13 +212,13 @@
   ) a join drug_concept_stage b on a.concept_code = b.concept_code where b.invalid_reason is null and b.domain_id = 'Drug'  
    group by error_type
 ;
-create idx_irs_code_1 on  internal_relationship_stage (concept_code_1 ASC);
-create idx_irs_code_2 on  internal_relationship_stage (concept_code_2 ASC);
+create index idx_irs_code_1 on  internal_relationship_stage (concept_code_1 ASC);
+create index idx_irs_code_2 on  internal_relationship_stage (concept_code_2 ASC);
 
-create idx_dds_code_1 on  ds_stage (drug_concept_code ASC);
-create idx_dss_code_2 on  internal_relationship_stage (ingredient_concept_code ASC);
+create index idx_dds_code_1 on  ds_stage (drug_concept_code ASC);
+create index idx_dss_code_2 on  ds_stage (ingredient_concept_code ASC);
 
-create idx_dcs_code on  Drug_concept_stage (concept_code ASC);
+create index  idx_dcs_code on  Drug_concept_stage (concept_code ASC);
 
 commit
 ;
@@ -245,7 +245,7 @@ left join ds_stage dsb on dsb.drug_concept_code=d.concept_code and dsq.box_size 
 left join ds_stage dsd on dsd.drug_concept_code=d.concept_code and ( dsd.denominator_value is not null or dsd.amount_value is not null)
 where d.concept_class_id in ('AMP', 'AMPP', 'VMP', 'VMPP') and d.domain_id='Drug' and d.invalid_reason is null
 ; 
-create table comb_check_tmp as 
+create table comb_check as 
  select ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier, count(*) from comb_check_tmp 
   group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier
   ;
