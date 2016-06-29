@@ -424,8 +424,7 @@ drop table drug_concept_stage_tmp_0;
 create table drug_concept_stage_tmp_0 as 
 select regexp_substr 
 (a.drug_comp, 
-'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|
- Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*') as dosage
+'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*') as dosage
 , drug_comp,  a.concept_name, a.concept_code from (
 select distinct
 trim(regexp_substr(t.concept_name_chgd, '[^!]+', 1, levels.column_value))  as drug_comp , concept_name, concept_code 
@@ -434,6 +433,7 @@ table(cast(multiset(select level from dual connect by  level <= length (regexp_r
 ;
 update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, 'molar', 'mmol/ml');
 update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, '/dose', '');
+update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, '/$', '') where regexp_like (dosage, '/$');
 --select * from drug_concept_stage_tmp_0 where concept_code = 12296111000001106
 --define number of components and ingredients
 alter  table drug_concept_stage_tmp_0 add ingr_cnt int
@@ -552,13 +552,13 @@ update ds_all_tmp set dosage = trim (dosage)
 drop table ds_all;
 create table ds_all as 
 select 
-case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)') = dosage 
+case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units|unit dose|drop)') = dosage 
 and not regexp_like (dosage, '%') 
 then regexp_replace (regexp_substr (dosage, '[[:digit:]\,\.]+'), ',')
 else  null end 
 as amount_value,
 
-case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)') = dosage 
+case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units|unit dose|drop)') = dosage 
 and not regexp_like (dosage, '%') 
 then  regexp_replace  (dosage, '[[:digit:]\,\.]+') 
 else  null end
@@ -566,14 +566,14 @@ as amount_unit,
 
 case when 
 regexp_substr (dosage,
- '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)') = dosage
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)') = dosage
 or regexp_like (dosage, '%') 
 then regexp_replace (regexp_substr (dosage, '^[[:digit:]\,\.]+') , ',')
 else  null end
 as numerator_value,
 
 case when regexp_substr (dosage, 
-'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)') = dosage
+'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)') = dosage
 or regexp_like (dosage, '%') 
 then regexp_substr (dosage, 'mg|%|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres', 1,1) 
 else  null end
@@ -581,7 +581,7 @@ as numerator_unit,
 
 case when 
 (
-regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)|h|square cm|microlitres*)') = dosage
+regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)|h|square cm|microlitres|unit dose|drop)') = dosage
 or regexp_like (dosage, '%')
 )
 and volume is null
@@ -591,10 +591,10 @@ else  null end
 as denominator_value,
 
 case when 
-(regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|microlitres|hour(s)*|h|square cm)') = dosage
+(regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|microlitres|hour(s)*|h|square cm|unit dose|drop)') = dosage
 or regexp_like (dosage, '%')
 ) and volume is null
-then regexp_substr (dosage, '(g|dose|ml|mg|ampoule|litre|hour(s)*|h*|square cm|microlitres)$')
+then regexp_substr (dosage, '(g|dose|ml|mg|ampoule|litre|hour(s)*|h*|square cm|microlitres|unit dose|drop)$')
 when volume is not  null then  regexp_replace (volume, '[[:digit:]\,\.]+')
 else null end
 as denominator_unit,
@@ -628,6 +628,13 @@ select concept_code_2 from
  Box_to_Drug b where b.AMOUNT_VALUE is not null)
 and denominator_value is not null 
 and numerator_unit!='%'
+;
+--!!!
+--Noradrenaline (base) 320micrograms/ml solution for infusion 950ml bottles for such concepts we need to keep denominator_value as true value and 
+update ds_all a
+set numerator_value =numerator_value*denominator_value
+where concept_code in (select concept_code from drug_concept_stage where regexp_like (concept_name , '[[:digit:]\.]+.*/ml.*[[:digit:]\.]+ml'))
+and numerator_value is not null and denominator_value is not null
 ;
 -- add Drug Boxes as mix of Boxes and Quant Drugs
 --select * from ds_all where not regexp_like (numerator_VALUE, '[[:digit:]/.]') 
@@ -698,7 +705,7 @@ set DRUG_NEW_NAME = regexp_replace (DRUG_NEW_NAME, ' / ', '!')
 ;
 drop table ds_omop_0; 
 create table ds_omop_0 as 
-select regexp_substr (a.drug_comp, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*') as dosage
+select regexp_substr (a.drug_comp, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*') as dosage
 , drug_comp,  a.DRUG_NEW_NAME, a.DRUG_CODE, a.CONCEPT_CODE_2, a.CONCEPT_name_2  from (
 select distinct
 trim(regexp_substr(t.DRUG_NEW_NAME, '[^!]+', 1, levels.column_value))  as drug_comp , DRUG_NEW_NAME, DRUG_CODE , CONCEPT_CODE_2, CONCEPT_name_2  
@@ -713,26 +720,26 @@ insert into ds_stage (DRUG_CONCEPT_CODE,INGREDIENT_CONCEPT_CODE,AMOUNT_VALUE,AMO
 select DRUG_CODE, CONCEPT_CODE_2,AMOUNT_VALUE,AMOUNT_UNIT,NUMERATOR_VALUE,NUMERATOR_UNIT,DENOMINATOR_VALUE,DENOMINATOR_UNIT from (
 
 select 
-case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)') = dosage 
+case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)') = dosage 
 and not regexp_like (dosage, '%') 
 then regexp_replace (regexp_substr (dosage, '[[:digit:]\,\.]+'), ',')
 else  null end 
 as amount_value,
 
-case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)') = dosage 
+case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)') = dosage 
 and not regexp_like (dosage, '%') 
 then  regexp_replace  (dosage, '[[:digit:]\,\.]+') 
 else  null end
 as amount_unit,
 
 case when 
-regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)') = dosage
+regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)') = dosage
 or regexp_like (dosage, '%') 
 then regexp_replace (regexp_substr (dosage, '^[[:digit:]\,\.]+') , ',')
 else  null end
 as numerator_value,
 
-case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)') = dosage
+case when regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)') = dosage
 or regexp_like (dosage, '%') 
 then regexp_substr (dosage, 'mg|%|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres', 1,1) 
 else  null end
@@ -740,7 +747,7 @@ as numerator_unit,
 
 case when 
 (
-regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres*)') = dosage
+regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres*)') = dosage
 or regexp_like (dosage, '%')
 )
 and volume is null
@@ -750,7 +757,7 @@ else  null end
 as denominator_value,
 
 case when 
-(regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|microlitres|hour(s)*|h*|square cm)') = dosage
+(regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|microlitres|hour(s)*|h*|square cm)') = dosage
 or regexp_like (dosage, '%')
 ) and volume is null
 then regexp_substr (dosage, '(g|dose|ml|mg|ampoule|litre|hour(s)*|h*|square cm|microlitres)$')
@@ -1286,10 +1293,11 @@ WHERE DRUG_CONCEPT_CODE = '14779411000001100'
 AND   INGREDIENT_CONCEPT_CODE = '80582002';
 
 --delete impossible combinations from ds_stage, treat these drugs as Clinical/Branded Drug Form
---for now we make an analysis
-
+--!!! keep this for further analysis
+/*
 delete from ds_stage a
 where numerator_UNIT is null and numerator_value is not null
+*/
  ;
 select count (distinct drug_concept_code) from (
 select drug_concept_code from ds_stage a
@@ -1305,32 +1313,121 @@ where amount_value is null and numerator_value is null
 and c.concept_class_id = 'Supplier'
 )
 ;
+/*
 select distinct b.concept_name from ds_stage a
 join drug_concept_stage b on a.drug_concept_code = b.concept_code
 where  amount_value is null and numerator_value is null
+*/
 ;
 commit
 ;
+/* don't need this anymore
 alter table drug_concept_Stage 
 add  source_concept_class_id varchar (20)
 ; 
 --set concept_classes to values given originaly by dm+d source
 update drug_concept_stage 
-set concept_class_id = 'Form' where insert_id in (3,4)
+set source_concept_class_id = 'Form' where insert_id in (3,4)
 ;
-update drug_concept_stage  set concept_class_id = 'Ingredient' where insert_id in (7,8)
+update drug_concept_stage  set source_concept_class_id = 'Ingredient' where insert_id in (7,8)
 ;
-update drug_concept_stage  set concept_class_id = 'VTM' where insert_id in (9,10)
+update drug_concept_stage  set source_concept_class_id = 'VTM' where insert_id in (9,10)
 ;
-update drug_concept_stage  set concept_class_id = 'VMP' where insert_id in (11,12)
+update drug_concept_stage  set source_concept_class_id = 'VMP' where insert_id in (11,12)
 ;
-update drug_concept_stage  set concept_class_id = 'AMP' where insert_id in (13)
+update drug_concept_stage  set source_concept_class_id = 'AMP' where insert_id in (13)
 ;
-update drug_concept_stage  set concept_class_id = 'VMPP' where insert_id in (14)
+update drug_concept_stage  set source_concept_class_id = 'VMPP' where insert_id in (14)
 ;
-update drug_concept_stage  set concept_class_id = 'AMPP' where insert_id in (15)
+update drug_concept_stage  set source_concept_class_id = 'AMPP' where insert_id in (15)
 ;
-update drug_concept_stage  set concept_class_id = 'Supplier' where insert_id in (16)
+update drug_concept_stage  set source_concept_class_id = 'Supplier' where insert_id in (16)
+;
+*/
+--investigation
+/*
+--update ds_stage, some dose forms can't have denominator but should have amount
+select distinct c.concept_code, c.concept_name from ds_stage ds
+join internal_relationship_stage ir on ir.concept_code_1 = ds.drug_concept_code 
+join drug_concept_stage c on c.concept_code = ir.concept_code_2
+and c.concept_class_id = 'Dose Form'
+ where amount_value is null and numerator_value is null and denominator_value is not null
+ ;
+ select *
+ -- distinct c.concept_code, c.concept_name 
+ from ds_stage ds
+join internal_relationship_stage ir on ir.concept_code_1 = ds.drug_concept_code 
+join drug_concept_stage c on c.concept_code = ir.concept_code_2
+join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1
+and c.concept_class_id = 'Dose Form'
+ where amount_value is null and numerator_value is null and denominator_value is not null
+ and c.concept_code in
+ ( --all solid forms
+ '3095811000001106',
+'385049006',
+'420358004',
+'385043007',
+'7376011000001109',
+'385045000',
+'85581007',
+'421079001',
+'385042002',
+'385054002',
+'385052003',
+'385087003'
+)
+
+;
+ select *
+ -- distinct c.concept_code, c.concept_name 
+ from ds_stage ds
+join internal_relationship_stage ir on ir.concept_code_1 = ds.drug_concept_code 
+join drug_concept_stage c on c.concept_code = ir.concept_code_2
+join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1
+and c.concept_class_id = 'Dose Form'
+ where amount_value is null and numerator_value is null and denominator_value is not null
+ and c.concept_code in
+ (
+'14945811000001105',
+'7375911000001101',
+'17036711000001108',
+'21829711000001102'
+)
+*/
+--change amount to denominator_value
+update  ds_stage ds set amount_value = denominator_value , amount_unit = denominator_unit
+where exists (select 1 from 
+internal_relationship_stage ir  
+join drug_concept_stage c on c.concept_code = ir.concept_code_2
+join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1
+and c.concept_class_id = 'Dose Form'
+ where amount_value is null and numerator_value is null and denominator_value is not null
+ and c.concept_code in
+ ( --all solid forms
+ '3095811000001106',
+'385049006',
+'420358004',
+'385043007',
+'7376011000001109',
+'385045000',
+'85581007',
+'421079001',
+'385042002',
+'385054002',
+'385052003',
+'385087003'
+)
+and  ir.concept_code_1 = ds.drug_concept_code )
 ;
 commit
 ; 
+--final update of ds_stage, sometimes Clinical Drug has no dosage, but Branded Drugs related to them do
+--update could be done easily
+select * from ds_stage a
+join drug_concept_stage b on drug_concept_code = concept_code
+where regexp_like (concept_name, 
+'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*') 
+and amount_value is null and numerator_value is null
+
+
+
