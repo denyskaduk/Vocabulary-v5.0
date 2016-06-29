@@ -424,7 +424,8 @@ drop table drug_concept_stage_tmp_0;
 create table drug_concept_stage_tmp_0 as 
 select regexp_substr 
 (a.drug_comp, 
-'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*') as dosage
+'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|
+ Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*') as dosage
 , drug_comp,  a.concept_name, a.concept_code from (
 select distinct
 trim(regexp_substr(t.concept_name_chgd, '[^!]+', 1, levels.column_value))  as drug_comp , concept_name, concept_code 
@@ -1310,6 +1311,9 @@ where  amount_value is null and numerator_value is null
 ;
 commit
 ;
+alter table drug_concept_Stage 
+add  source_concept_class_id varchar (20)
+; 
 --set concept_classes to values given originaly by dm+d source
 update drug_concept_stage 
 set concept_class_id = 'Form' where insert_id in (3,4)
@@ -1329,4 +1333,4 @@ update drug_concept_stage  set concept_class_id = 'AMPP' where insert_id in (15)
 update drug_concept_stage  set concept_class_id = 'Supplier' where insert_id in (16)
 ;
 commit
-;
+; 
