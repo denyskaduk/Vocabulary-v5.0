@@ -38,11 +38,9 @@ set CONCEPT_CODE_2 ='OMOP'||new_seq.nextval where CONCEPT_CODE_2 is null and CON
 select CONCEPT_CODE_2, CONCEPT_name_2 from ingred_to_ingred_FINAL_BY_Lena where CONCEPT_CODE_2 like 'OMOP%'
 ;
 insert into ingred_to_ingred_FINAL_BY_Lena (CONCEPT_CODE_1, CONCEPT_name_1)
-select CONCEPT_CODE_2, CONCEPT_name_2 from ingred_to_ingred_FINAL_BY_Lena where CONCEPT_CODE_2 like 'OMOP%'
+select distinct CONCEPT_CODE_2, CONCEPT_name_2 from ingred_to_ingred_FINAL_BY_Lena where CONCEPT_CODE_2 like 'OMOP%'
 ;
 */
-
-
 --Non drug definition - several steps including different criteria for non-drug definition	
 --BASED ON NAMES, AND absence of form info
 
@@ -319,14 +317,14 @@ or DOMAIN_ID ='Device'
 ) and concept_class_id = 'Clinical Drug'
 ;
 --ADD MANUALLY DEFINED NON DRUG CONCEPTS
-insert into clnical_non_drug (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID)
+insert into clnical_non_drug (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID, SOURCE_CONCEPT_CLASS_ID)
 select distinct  a.* from drug_concept_stage a 
 join (select cast (drug_code as varchar (250)) as drug_code  from non_drug --!!!MANUAL TABLE 
  union select concept_code from non_drug_2 --!!!MANUAL TABLE
  ) n
  on n.drug_code= a.concept_code
  ;
- insert into clnical_non_drug  (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID)
+ insert into clnical_non_drug  (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID, SOURCE_CONCEPT_CLASS_ID)
  select * from drug_concept_stage where concept_code= '5015311000001107'
   ;
  DELETE FROM clnical_non_drug WHERE CONCEPT_CODE IN 
@@ -1155,9 +1153,9 @@ drop table drug_concept_stage
 create table drug_concept_stage as select * from
 drug_concept_stage_existing
 ;
-update drug_concept_stage set domain_id = 'Device' where concept_code in (select concept_code from non_drug_full)
+update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_code in (select concept_code from non_drug_full)
 ;
-update drug_concept_stage set domain_id = 'Device' where concept_code in ('3378311000001103','3378411000001105')
+update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_code in ('3378311000001103','3378411000001105')
 ;
 update drug_concept_stage set domain_id = 'Drug' where concept_code not in (select concept_code from non_drug_full)
 ;
@@ -1207,59 +1205,6 @@ set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
 -- select * from drug_concept_stage where concept_code = 'OMOP28663'
 commit;
 
-drop sequence new_vocab;
- create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder; -- change to procedure
-drop table name_replace;
- create table name_replace as 
- select 'OMOP'||new_vocab.nextval as concept_code, concept_name from (
-select distinct  concept_name from drug_concept_stage where concept_code like 'OMOP%')
-;
-drop  table code_replace;
-create table code_replace as
-select a.concept_code as old_code, b.concept_code as new_code
-from drug_concept_stage a join name_replace b on a.concept_name = b.concept_name
-where a.concept_code like 'OMOP%'
-;
-update drug_concept_stage a set concept_code = (select new_code from code_replace b where a.concept_code = b.old_code) 
-where a.concept_code like 'OMOP%'
-;
-update relationship_to_concept a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
-where a.concept_code_1 like 'OMOP%'
-;
-update ds_stage a  set ingredient_concept_code = (select new_code from code_replace b where a.ingredient_concept_code = b.old_code)
-where a.ingredient_concept_code like 'OMOP%'
-;
-update ds_stage a  set drug_concept_code = (select new_code from code_replace b where a.drug_concept_code = b.old_code)
-where a.drug_concept_code like 'OMOP%'
-;
-delete from ds_stage where ingredient_concept_code is null
-;
-update internal_relationship_stage a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
-where a.concept_code_1 like 'OMOP%'
-;
-update internal_relationship_stage a  set concept_code_2 = (select new_code from code_replace b where a.concept_code_2 = b.old_code)
-where a.concept_code_2 like 'OMOP%'
-;
-update pack_content a  set DRUG_CONCEPT_CODE = (select new_code from code_replace b where a.DRUG_CONCEPT_CODE = b.old_code)
-where a.DRUG_CONCEPT_CODE like 'OMOP%'
-;
---delete duplicates from ds_stage
-create table drug_concept_stage_v0 as select distinct * from  drug_concept_stage
-;
-drop table drug_concept_stage
-;
-create table drug_concept_stage as  select distinct * from  drug_concept_stage_v0
-;
-drop table drug_concept_stage_v0;
-commit;
-
-create table relationship_to_concept_v0 as select distinct * from  relationship_to_concept
-;
-drop table relationship_to_concept
-;
-create table relationship_to_concept as  select distinct * from  relationship_to_concept_v0
-;
-drop table relationship_to_concept_v0;
 
 DELETE
 FROM RELATIONSHIP_TO_CONCEPT
@@ -1419,15 +1364,87 @@ and c.concept_class_id = 'Dose Form'
 )
 and  ir.concept_code_1 = ds.drug_concept_code )
 ;
+create table ds_brand_update as 
+select CONCEPT_CODE_1, CONCEPT_NAME_1 from branded_to_clinical 
+join drug_concept_stage on CONCEPT_CODE_1 = concept_code and domain_id ='Drug' and invalid_reason is null
+join (select drug_concept_code from ds_stage where amount_value is null and numerator_value is null group by drug_concept_code having count (1) = 1) ds on ds.drug_concept_code = concept_code_1
+where regexp_like (concept_name_1, 
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*')
+and not  
+regexp_like  (concept_name_2, 
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*')
+;
+update ds_stage 
+set amount_value = (select regexp_substr ( regexp_substr (concept_name_1, '[[:digit:]\,\.]+(mg|g|microgram(s)*|million unit(s*))'), '[[:digit:]\,\.]+') from ds_brand_update where concept_code_1 = drug_concept_code),
+ amount_unit = (select regexp_replace ( regexp_substr (concept_name_1, '[[:digit:]\,\.]+(mg|g|microgram(s)*|million unit(s*))'), '[[:digit:]\,\.]+') from ds_brand_update where concept_code_1 = drug_concept_code)
+where exists (select 1 from ds_brand_update where concept_code_1 = drug_concept_code)
+and drug_concept_code not in ('16636811000001107', '16636911000001102', '15650711000001103', '15651111000001105' )--Packs and vaccines
+;
 commit
 ; 
 --final update of ds_stage, sometimes Clinical Drug has no dosage, but Branded Drugs related to them do
 --update could be done easily
+/*
 select * from ds_stage a
 join drug_concept_stage b on drug_concept_code = concept_code
 where regexp_like (concept_name, 
 '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*') 
 and amount_value is null and numerator_value is null
+;
+*/
+drop sequence new_vocab;
+ create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder; -- change to procedure
+drop table name_replace;
+ create table name_replace as 
+ select 'OMOP'||new_vocab.nextval as concept_code, concept_name from (
+select distinct  concept_name from drug_concept_stage where concept_code like 'OMOP%')
+;
+drop  table code_replace;
+create table code_replace as
+select a.concept_code as old_code, b.concept_code as new_code
+from drug_concept_stage a join name_replace b on a.concept_name = b.concept_name
+where a.concept_code like 'OMOP%'
+;
+select * from code_replace where old_code like 'OMOP%'
+;
+update drug_concept_stage a set concept_code = (select new_code from code_replace b where a.concept_code = b.old_code) 
+where a.concept_code like 'OMOP%'
+;
+update relationship_to_concept a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
+where a.concept_code_1 like 'OMOP%'
+;
+update ds_stage a  set ingredient_concept_code = (select new_code from code_replace b where a.ingredient_concept_code = b.old_code)
+where a.ingredient_concept_code like 'OMOP%'
+;
+update ds_stage a  set drug_concept_code = (select new_code from code_replace b where a.drug_concept_code = b.old_code)
+where a.drug_concept_code like 'OMOP%'
+;
+update internal_relationship_stage a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
+where a.concept_code_1 like 'OMOP%'
+;
+update internal_relationship_stage a  set concept_code_2 = (select new_code from code_replace b where a.concept_code_2 = b.old_code)
+where a.concept_code_2 like 'OMOP%'
+;
+update pack_content a  set DRUG_CONCEPT_CODE = (select new_code from code_replace b where a.DRUG_CONCEPT_CODE = b.old_code)
+where a.DRUG_CONCEPT_CODE like 'OMOP%'
+;
+--delete duplicates from ds_stage
+create table drug_concept_stage_v0 as select distinct * from  drug_concept_stage
+;
+drop table drug_concept_stage
+;
+create table drug_concept_stage as  select distinct * from  drug_concept_stage_v0
+;
+drop table drug_concept_stage_v0;
+commit;
 
+create table relationship_to_concept_v0 as select distinct * from  relationship_to_concept
+;
+drop table relationship_to_concept
+;
+create table relationship_to_concept as  select distinct * from  relationship_to_concept_v0
+;
+drop table relationship_to_concept_v0;
 
-
+commit
+;

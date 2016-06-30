@@ -828,20 +828,72 @@ and amount_value is null and numerator_value is null
 ;select * from drug_concept_stage where concept_code ='7995811000001106'
 ;
 select * from branded_to_clinical where concept_code_1 ='11582411000001107'
-;
-select count(*) from branded_to_clinical 
+;--!!! update
+create table ds_brand_update as 
+select CONCEPT_CODE_1, CONCEPT_NAME_1 from branded_to_clinical 
 join drug_concept_stage on CONCEPT_CODE_1 = concept_code and domain_id ='Drug' and invalid_reason is null
-join (select drug_concept_code from ds_stage group by drug_concept_code having count (1) = 1) ds on ds.drug_concept_code = concept_code_1
+join (select drug_concept_code from ds_stage where amount_value is null and numerator_value is null group by drug_concept_code having count (1) = 1) ds on ds.drug_concept_code = concept_code_1
 where regexp_like (concept_name_1, 
-'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*')
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*')
 and not  
-regexp_like (concept_name_2, 
-'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|milli  on unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*')
+regexp_like  (concept_name_2, 
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*')
 ;
+update ds_stage 
+set amount_value = (select regexp_substr ( regexp_substr (concept_name_1, '[[:digit:]\,\.]+(mg|g|microgram(s)*|million unit(s*))'), '[[:digit:]\,\.]+') from ds_brand_update where concept_code_1 = drug_concept_code),
+ amount_unit = (select regexp_replace ( regexp_substr (concept_name_1, '[[:digit:]\,\.]+(mg|g|microgram(s)*|million unit(s*))'), '[[:digit:]\,\.]+') from ds_brand_update where concept_code_1 = drug_concept_code)
+where exists (select 1 from ds_brand_update where concept_code_1 = drug_concept_code)
+and drug_concept_code not in ('16636811000001107', '16636911000001102', '15650711000001103', '15651111000001105' )--Packs and vaccines
+;
+select * from ds_stage where drug_concept_code  in ('16636811000001107', '16636911000001102');
+
+select * from ds_brand_update;
+
 select * from drug_concept_stage_tmp_0
 join ds_stage on CONCEPT_CODE = drug_concept_code
 where  regexp_like (concept_name , '[[:digit:]\.]+.*/ml.*[[:digit:]\.]+ml')
 ;
 select * from ds_stage where drug_concept_code = '29768011000001107'
 ;
+select * from pack_content where PACK_CONCEPT_CODE = '16636811000001107'; 16636811000001107, 16636911000001102, 15650711000001103, 15651111000001105 --Packs and vaccines
 Follitropin alfa 225units/0.375ml solution for injection pre-filled disposable devices
+;
+select * from drug_concept_stage_tmp_0
+join ds_stage on CONCEPT_CODE = drug_concept_code
+where not regexp_like (DRUG_COMP , '[[:digit:]\.]+.*/ml.*[[:digit:]\.]+ml') and regexp_like (DRUG_COMP , '[[:digit:]\.]+.*/ml')
+and numerator_value !=  regexp_replace ( regexp_substr (regexp_substr (DRUG_COMP , '[[:digit:]\.\,]+.*/ml'), '[[:digit:]\.\,]+') ,'\,')
+;
+select * from  ingred_to_ingred_FINAL_BY_Lena where concept_code_2 in (
+'39972003' ,'21143111000001109', '350576006'
+)
+;
+select * from  ingred_to_ingred_FINAL_BY_Lena where concept_code_1 in (
+'39972003' ,'21143111000001109', '350576006'
+)
+--how '350576006' got to ds_stage
+;
+--another algoritm
+select * from drug_concept_stage join 
+(
+SELECT drug_concept_code, count (1) as cnt FROM ds_stage group by drug_concept_code) a  on drug_concept_code = concept_code  and regexp_count (concept_name, ' / ') + 1 > cnt and invalid_reason is null
+join ds_stage ds on ds.drug_CONCEPT_CODE = concept_code
+;
+4701111000001104, 8888711000001107, 
+Dextromethorphan 5mg/5ml / Triprolidine 625micrograms/5ml oral solution sugar free
+;
+select * from ds_all where concept_code = '4701111000001104'
+;
+select * from ds_stage where drug_concept_code = '4701111000001104'
+;
+select * from ds_stage where INGREDIENT_CONCEPT_CODE  like 'OMOP%'
+;
+SELECT * FROM ingred_to_ingred_FINAL_BY_Lena WHERE CONCEPT_CODE_1 IN (
+SELECT CONCEPT_CODE_1 FROM ingred_to_ingred_FINAL_BY_Lena WHERE CONCEPT_NAME_1 LIKE '%+%' GROUP BY CONCEPT_CODE_1 HAVING COUNT (1) = 1)
+;
+select CONCEPT_NAME_1,'Drug', 'dm+d', 'Ingredient', 'S', concept_code_1, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from ingred_to_ingred_FINAL_BY_Lena where concept_code_1 like 'OMOP%'
+;
+select * from ingred_to_ingred_FINAL_BY_Lena where 
+CONCEPT_CODE_1 in (
+select CONCEPT_CODE_1 from ingred_to_ingred_FINAL_BY_Lena where CONCEPT_CODE_2 like 'OMOP%')
+;
+select * from ds_stage where drug_concept_code ='7884011000001107'
