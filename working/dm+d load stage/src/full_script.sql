@@ -634,7 +634,7 @@ and numerator_unit!='%'
 update ds_all a
 set numerator_value =numerator_value*denominator_value
 where concept_code in (select concept_code from drug_concept_stage where regexp_like (concept_name , '[[:digit:]\.]+.*/ml.*[[:digit:]\.]+ml'))
-and numerator_value is not null and denominator_value is not null
+and numerator_value is not null and denominator_value is not null and numerator_value !='%'
 ;
 -- add Drug Boxes as mix of Boxes and Quant Drugs
 --select * from ds_all where not regexp_like (numerator_VALUE, '[[:digit:]/.]') 
