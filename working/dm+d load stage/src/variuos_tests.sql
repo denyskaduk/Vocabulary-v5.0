@@ -897,3 +897,33 @@ CONCEPT_CODE_1 in (
 select CONCEPT_CODE_1 from ingred_to_ingred_FINAL_BY_Lena where CONCEPT_CODE_2 like 'OMOP%')
 ;
 select * from ds_stage where drug_concept_code ='7884011000001107'
+;
+select * from branded_to_clinical 
+join drug_concept_stage on CONCEPT_CODE_1 = concept_code and domain_id ='Drug' and invalid_reason is null
+join (select drug_concept_code from ds_stage/* where amount_value is null and numerator_value is null*/ group by drug_concept_code having count (1) = 1) ds on ds.drug_concept_code = concept_code_1
+where regexp_like (concept_name_1, 
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*')
+and not  
+regexp_like  (concept_name_2, 
+ '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol|million units)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres)*')
+;
+select count (*) from drug_concept_stage where concept_name like '%cylinder%'
+;
+select b.concept_name, c.concept_name, a.* from  ds_stage a -- 20540711000001101, 20521611000001102
+join drug_concept_stage b on a.drug_concept_code = b.concept_code
+join drug_concept_stage c on c.concept_code = ingredient_concept_code
+where drug_concept_code in (
+select drug_concept_code from ds_stage a
+join drug_concept_stage b on a.drug_concept_code = b.concept_code
+
+where amount_value is null and numerator_value is null
+and concept_class_id = 'Branded Drug'
+)
+;
+select * from drug_concept_stage where concept_class_id = 'Brand Name'
+and rownum < 1000
+;
+select * from branded_drug_to_brand_name where BRAND_NAME = 'Aquasol A Parenteral';
+select regexp_substr (brand_name,'\s(sterile water inhalation solution|wort herb tincture|sugar free|oral powder|in Orabase|Intravenous|ear drops|rectal|facewash|concentrate for|suspension for injection|ear/eye/nose drops|I.V.|nasal spray)+')
+ from branded_drug_to_brand_name
+;

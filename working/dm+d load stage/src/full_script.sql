@@ -312,7 +312,7 @@ INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_COD
 drop table clnical_non_drug;
 create table clnical_non_drug as
 select * from drug_concept_stage where (concept_code not in (select concept_code_1 from clin_dr_to_dose_form where concept_code_1 is not null)  and invalid_reason is  null
-or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva', 'i')
+or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva|cylinder', 'i')
 or DOMAIN_ID ='Device'
 ) and concept_class_id = 'Clinical Drug'
 ;
@@ -928,7 +928,7 @@ delete  branded_drug_to_brand_name where BRAND_NAME in
 or regexp_like(brand_name, 'Zinc sulfate|Zinc and|Water|Vitamin B compound|Thymol|Sodium|Simple linctus|Ringers|Podophyllin|Phenol|Oxygen|Morphine|Medical|Dextran|Magnesium|Macrogol|Lipofundin|Kaolin|Kalium|Ipecacuanha|Iodine|Hypurin|Hypericum|Helium cylinders|Glycerin|Glucose|Gentian|Ferric chloride|E-D3|E45|Carbon dioxide cylinders|Bacillus Calmette-Guerin|Anticoagulant Citrate|Ammonia|Air cylinders|Ammonium chloride|Emulsifying|Ferrum|Carbomer')
 ;
 update  branded_drug_to_brand_name
-set brand_name=regexp_replace(brand_name,'(sterile water inhalation solution|wort herb tincture|sugar free|oral powder|in Orabase|Intravenous|ear drops|rectal|facewash|concentrate for|suspension for injection|ear/eye/nose drops|I.V.)+');
+set brand_name=regexp_replace(brand_name,'\s(sterile water inhalation solution|wort herb tincture|sugar free|oral powder|in Orabase|Intravenous|ear drops|rectal|facewash|concentrate for|suspension for injection|ear/eye/nose drops|I.V.|nasal spray)+');
 
 --add sequence
 drop sequence new_seq;
@@ -1445,6 +1445,16 @@ drop table relationship_to_concept
 create table relationship_to_concept as  select distinct * from  relationship_to_concept_v0
 ;
 drop table relationship_to_concept_v0;
-
+;
+--concept_synonym_stage,dm+d part, need to discuss with Christian about RxNorm Extension part
+insert into concept_synonym_stage (SYNONYM_CONCEPT_ID,SYNONYM_NAME,SYNONYM_CONCEPT_CODE,SYNONYM_VOCABULARY_ID,LANGUAGE_CONCEPT_ID)
+select '', concept_name, concept_code, 'dm+d', 4093769 from drug_concept_stage where concept_code not like 'OMOP%'
 commit
 ;
+UPDATE DS_STAGE
+   SET AMOUNT_VALUE = 12.5,
+       AMOUNT_UNIT = 'mg'
+WHERE DRUG_CONCEPT_CODE = '18988111000001104'
+AND   INGREDIENT_CONCEPT_CODE = '387525002';
+
+
