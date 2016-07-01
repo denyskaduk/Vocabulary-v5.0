@@ -116,7 +116,10 @@ select distinct CONCEPT_CODE,CONCEPT_NAME,CONCEPT_CODE_2,CONCEPT_NAME_2 from DR_
 --further this Packs table will be modified using non-drugs definition
 ;
 --manual update of Packs tables 
-/*
+drop sequence new_seq;
+ create sequence new_seq increment by 1 start with 100 nocycle cache 20 noorder
+ ;
+drop table PACK_DRUG_TO_CODE_2_2_SEQ;
 create table PACK_DRUG_TO_CODE_2_2_SEQ as (select distinct drug_new_name from PACK_DRUG_TO_CODE_2_2 where drug_code is null);
 alter table  PACK_DRUG_TO_CODE_2_2_SEQ 
 add drug_code varchar(255);
@@ -126,9 +129,7 @@ update PACK_DRUG_TO_CODE_2_2 b
 set b.drug_code= case when b.drug_code is null then (select a.drug_code from PACK_DRUG_TO_CODE_2_2_SEQ a where a.drug_new_name=b.drug_new_name ) else b.drug_code end;
 update PACK_DRUG_TO_CODE_2_2
 set PACK_NAME=regexp_replace(PACK_NAME,'"')
-*/
 --for now remain PACK_DRUG_TO_CODE_2_2 as manual without rebuilding
-
 ;
 --Box to drug - 1 step
 drop table Box_to_Drug ;
@@ -948,8 +949,7 @@ set brand_name=regexp_replace(brand_name,'(\s)+$');
 update  branded_drug_to_brand_name
 set brand_name=regexp_replace(brand_name,'  ',' ');
 --add sequence
-drop sequence new_seq;
- create sequence new_seq increment by 1 start with 100 nocycle cache 20 noorder
+
  ;
  drop table br_name_list;
 create table br_name_list as 
@@ -1403,16 +1403,6 @@ select * from ds_stage where drug_concept_code  in ('16636811000001107', '166369
 ;
 commit
 ;
---final update of ds_stage, sometimes Clinical Drug has no dosage, but Branded Drugs related to them do
---update could be done easily
-/*
-select * from ds_stage a
-join drug_concept_stage b on drug_concept_code = concept_code
-where regexp_like (concept_name, 
-'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*') 
-and amount_value is null and numerator_value is null
-;
-*/
 drop sequence new_vocab;
  create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder
  ; -- change to procedure
@@ -1421,28 +1411,34 @@ drop table code_replace;
  select 'OMOP'||new_vocab.nextval as new_code, concept_code as old_code from (
 select distinct  concept_code from drug_concept_stage where concept_code like 'OMOP%' order by (cast ( regexp_substr( concept_code, '\d+') as int))
 )
-
 ;
 update drug_concept_stage a set concept_code = (select new_code from code_replace b where a.concept_code = b.old_code) 
 where a.concept_code like 'OMOP%'
 ;
+commit
+;
 update relationship_to_concept a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
 where a.concept_code_1 like 'OMOP%'
+;commit
 ;
 update ds_stage a  set ingredient_concept_code = (select new_code from code_replace b where a.ingredient_concept_code = b.old_code)
 where a.ingredient_concept_code like 'OMOP%'
 ;
 update ds_stage a  set drug_concept_code = (select new_code from code_replace b where a.drug_concept_code = b.old_code)
 where a.drug_concept_code like 'OMOP%'
+;commit
 ;
 update internal_relationship_stage a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
 where a.concept_code_1 like 'OMOP%'
+;commit
 ;
 update internal_relationship_stage a  set concept_code_2 = (select new_code from code_replace b where a.concept_code_2 = b.old_code)
 where a.concept_code_2 like 'OMOP%'
+;commit
 ;
 update pack_content a  set DRUG_CONCEPT_CODE = (select new_code from code_replace b where a.DRUG_CONCEPT_CODE = b.old_code)
 where a.DRUG_CONCEPT_CODE like 'OMOP%'
+;commit
 ;
 --delete duplicates from ds_stage
 create table drug_concept_stage_v0 as select distinct * from  drug_concept_stage
@@ -1470,6 +1466,8 @@ UPDATE DS_STAGE
    SET AMOUNT_VALUE = 12.5,
        AMOUNT_UNIT = 'mg'
 WHERE DRUG_CONCEPT_CODE = '18988111000001104'
-AND   INGREDIENT_CONCEPT_CODE = '387525002';
+AND   INGREDIENT_CONCEPT_CODE = '387525002'
+;
 commit
 ;
+
