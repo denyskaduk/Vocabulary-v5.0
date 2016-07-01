@@ -893,11 +893,12 @@ and relationship_id in ('Concept same_as to', 'Concept poss_eq to', 'Concept rep
 ;
 --Brand NAMES - some clinical Drugs also should considered as Branded (Generic and Co-%
 --need to review
-drop table branded_drug_to_brand_name;
+ drop table branded_drug_to_brand_name;
 create table branded_drug_to_brand_name as 
 select distinct concept_code, concept_name,  
 regexp_replace (regexp_replace ( regexp_replace(concept_name, '\s\d.*'), ' \(.*'), 
- '(\s(tablet(s?)|cream|capsule(s?)|gel|powder|ointment|suppositories|emollient|liquid|sachets.*|transdermal patches|infusion|solution for.*|lotion|oral solution|chewable.*|effervescent.*irrigation.*|caplets.*|oral drops|oral powder|soluble tablets sugar free|lozenges)$)') 
+ '(\s(tablet(s?)|cream|capsule(s?)|gel|powder|ointment|suppositories|emollient|liquid|sachets.*|transdermal patches|infusion|solution for.*|lotion|oral solution|chewable.*|effervescent.*irrigation.*|caplets.*|oral 
+|oral powder|soluble tablets sugar free|lozenges)$)') 
 as  BRAND_NAME from drug_concept_stage
 where (concept_class_id = 'Branded Drug' and  concept_name not like 'Generic %')
 union
@@ -916,20 +917,36 @@ drug_concept_stage b where lower (a.BRAND_NAME) = lower (b.concept_name)
   delete  from branded_drug_to_brand_name a where exists (select 1 from
 non_drug_full b where b.concept_code = a.concept_code)
 ;
---Anna's update
+
 delete  branded_drug_to_brand_name where BRAND_NAME in 
-('Zinc compound paste'	,'Yellow soft paraffin solid'	,'Wild cherry syrup'	,'White soft paraffin solid	','White liniment'	,'Vitamins A and D capsules BPC'	,'Vitamins'	,'Vitamin K2'	,'Vitamin E'	,'Vitamin D3'	,
-'Vitamin C','Tri-iodothyronine'	,'Trichloroacetic acid and Salicylic acid paste'	,'Tea Tree and Witch Hazel'	,'Surgical spirit'	,'Starch maize','St. James Balm','Squill opiate linctus paediatric'	,
-'Sodium DL-3-hydroxybutyrate'	,'Snake antivenin powder and solvent for'	,'SGK Glucosamine'	,'Sepia officinalis'	,'Ringer lactate'	,'Rhus toxicodendron'	,'Recombinant human hyaluronidase'	,'Pulsatilla pratensis'	,'Podophyllum'	,
-'Phenylalanine'	,'Passiflora incarnata'	,'Oxygen cylinders'	,'Oily phenol'	,'Levothyroxine sodium'	,'Ignatia amara'	,'Glucosamine Chondroitin Complex'	,'Gentamycin Augensalbe'	,'Gentamicin Intrathecal'	,'Gelsemium sempervirens'	,
-'Euphrasia officinalis'	,'Drosera rotundifolia','Dried Factor VIII Fraction type'	,'Carbostesin-adrenaline'	,'Calcium and Ergocalciferol'	,'Black currant syrup'	,'Avoca wart and verruca treatment set'	,'Avena sativa comp drops'	,
-'Arsenicum album'	,'Arginine hydrochloride'	,'Argentum nitricum'	,'Anise water concentrated'	,'Amyl nitrite vitrellae'	,'Amaranth solution'	,'Alpha-Lipoic Acid'	,'Actaea racemosa'	,'Aconitum napellus','8-Methoxypsoralen'	,
-'4-Aminopyridine'	,'3,4-Diaminopyridine')
-or regexp_like(brand_name, 'Zinc sulfate|Zinc and|Water|Vitamin B compound|Thymol|Sodium|Simple linctus|Ringers|Podophyllin|Phenol|Oxygen|Morphine|Medical|Dextran|Magnesium|Macrogol|Lipofundin|Kaolin|Kalium|Ipecacuanha|Iodine|Hypurin|Hypericum|Helium cylinders|Glycerin|Glucose|Gentian|Ferric chloride|E-D3|E45|Carbon dioxide cylinders|Bacillus Calmette-Guerin|Anticoagulant Citrate|Ammonia|Air cylinders|Ammonium chloride|Emulsifying|Ferrum|Carbomer')
+('Zinc compound paste'	,'Yellow soft paraffin solid'	,'Wild cherry syrup','Pneumococcal polysaccharide vaccine','Hibicet hospital concentrate'	,'Crystal violet powder BP','White soft paraffin solid','Thuja occidentalis','White liniment'	,'Vitamins A and D capsules BPC'	,'Vitamins'	,'Vitamin K2'	,'Vitamin E'	,'Vitamin D3'	,
+'Vitamin C','Tri-iodothyronine'	,'Trichloroacetic acid and Salicylic acid paste','Phosphates enema'	,'Tea Tree and Witch Hazel'	,'Surgical spirit'	,'Starch maize','St. James Balm','Squill opiate linctus paediatric'	,
+'Sodium DL-3-hydroxybutyrate'	,'Snake antivenin powder and solvent for','Erythrocin IV lactobionate'	,'SGK Glucosamine','Lycopodium clavatum'	,'Orange tincture BP','Sepia officinalis'	,'Ringer lactate'	,'Rhus toxicodendron'	,'Recombinant human hyaluronidase'	,'Pulsatilla pratensis'	,'Podophyllum'	,
+'Phenylalanine'	,'Passiflora incarnata'	,'Oxygen cylinders','Phytolacca decandra'	,'Oily phenol'	,'Levothyroxine sodium'	,'Ignatia amara'	,'Glucosamine Chondroitin Complex'	,'Gentamycin Augensalbe'	,'Gentamicin Intrathecal'	,'Gelsemium sempervirens'	,
+'Euphrasia officinalis'	,'Drosera rotundifolia','Menthol and Eucalyptus inhalation','Dried Factor VIII Fraction type'	,'Carbostesin-adrenaline'	,'Calcium and Ergocalciferol'	,'Black currant syrup'	,'Avoca wart and verruca treatment set'	,'Avena sativa comp drops'	,
+'Arsenicum album'	,'Arginine hydrochloride'	,'Argentum nitricum','N-Acetylcysteine','Fragaria / Vitis','Coffea cruda'	,'Anise water concentrated'	,'Amyl nitrite vitrellae'	,'Cardamom compound tincture','Amaranth solution'	,'Alpha-Lipoic Acid'	,'Actaea racemosa'	,'Aconitum napellus','8-Methoxypsoralen'	,
+'4-Aminopyridine'	,'3,4-Diaminopyridine','Adrenaline acid tartrate for anaphylaxis','Paraffin hard solid','Allium cepa','Antidiphtheria serum','Anticoagulant solution ACD-A','Anticholium','Anti-D','Mercurius solubilis','Coal tar paste','Cysteamine hydrochloride',
+'Bismuth subnitrate and Iodoform paste','Calcium Disodium Versenate','Calendula officinalis','Intraven mannitol','Candida albicans','Cantharis vesicatoria','Chloral hydrate crystals','Chloroquine sulphate','Cocculus indicus',
+'Carbo vegetabilis','Benzoin compound tincture','Benzoic acid compound','Iodoform compound paint BPC','Lavender compound tincture','Pyrogallol compound','Wool fat solid','Tragacanth compound','Methylene blue','Arnica','Aspartate Glutamate')
+or regexp_like(brand_name, 'Zinc sulfate|Rabies vaccine|Zinc and|Water|Vitamin B compound|Thymol|Sodium|Simple linctus|Ringers|Podophyllin|Phenol|Oxygen|Morphine|Medical|Dextran|Magnesium|Macrogol|Lipofundin|Kaolin|Kalium|Ipecacuanha|Iodine|Hypurin|Hypericum|Helium cylinders|Glycerin|Glucose|Gentian|Ferric chloride|E-D3|E45|Carbon dioxide cylinders|treatment and extension course vials')
+or regexp_like(brand_name, 'Bacillus Calmette-Guerin|Polyvalent snake antivenom|Rose water|Anticoagulant Citrate|Ammonia|Air cylinders|Ammonium chloride|Emulsifying|Ferrum|Carbomer|Alginate raft-forming|Ammonium acetate|Liquid paraffin|Acacia|Ethyl chloride|Aqueous|Beeswax|Potassium iodide|Potassium bromide|Covonia mentholated|Chalk with Opium|Calcarea|Calamine|Chloroform|Camphor|Nitrous oxide')
 ;
 update  branded_drug_to_brand_name
-set brand_name=regexp_replace(brand_name,'\s(sterile water inhalation solution|wort herb tincture|sugar free|oral powder|in Orabase|Intravenous|ear drops|rectal|facewash|concentrate for|suspension for injection|ear/eye/nose drops|I.V.|nasal spray)+');
-
+set brand_name=regexp_replace(brand_name,'(\ssterile water inhalation solution|wort herb tincture|eye drops|sugar free|oral powder|in Orabase|Intravenous|ear drops|rectal|oral single dose|tablets|granules and solution|mouthwash|toothpaste|shampoo|sterile saline inhalation|follow on pack|initiation pack
+|facewash|concentrate for|pastilles|glucose|No|inhalation|vapour|sterile saline|suspension for injection|phosphates|ear/eye/nose drops|Injectable|I.V.|preservative free|emulsion for injection)');
+update  branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'(\sIntra-articular / Intradermal|Intra-articular / Intramuscular|inhalant oil|powder and suspension for|powder and solvent for|oral suspension|with spacer|gel|teething|inhaler|solution|linctus|medicated sponge implant|water for irrigation|original|apple|lemon|tropical|orange|blackcurrant|ophthalmic)+');
+update  branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'(\ssoluble|powder spray|ear|throat|nasal|oromucosal|aerosol|water for|viasls|injection pack|initial set|maintenance set|starter pack|injection|gastro-resistant|nebuliser|pessaries|emulsion for|mixture|granules|elixir)+')
+;
+update  branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'(\ssuspension enema|IV|jelly|/$|-$|emulsion and suspension for|eye|wash|ointment|skin salve|orodispersible|transdermal patches treatment|vials|vaginal|irrigation|foam enema|Methylthioninium chloride |powder enema|cutaneous emulsion|inhalation powder capsules with device|lancets|bath additive|catheter maintence|lozenges|modified-release|mouthwash|drops|gum|oral|paediatric|irrigation solution|balm|spray)+');
+update branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'/eye(\s)?(.*)?|with (.*) mask|emulsion(\s)?(.*)?|vaccine(\s)?(.*)?|suspension(\s)?(.*)?|powder for(\s)?(.*)?|sodium(\s)?(.*)?|liquid(\s)?(.*)?|potassium(\s)?(.*)?|emollient(\s)?(.*)?|homeopathic(\s)?(.*)?|effervescent(\s)?(.*)?|syrup|for (.*) use');
+update  branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'(\s)+$');
+update  branded_drug_to_brand_name
+set brand_name=regexp_replace(brand_name,'  ',' ');
 --add sequence
 drop sequence new_seq;
  create sequence new_seq increment by 1 start with 100 nocycle cache 20 noorder
@@ -1161,27 +1178,27 @@ update drug_concept_stage set domain_id = 'Drug' where concept_code not in (sele
 ;
 --newly generated concepts 
 --Brand Names
-insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
-select                           CONCEPT_NAME,'Drug', 'dm+d', 'Brand Name', '', concept_code, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from br_name_list
+insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id )
+select                           CONCEPT_NAME,'Drug', 'dm+d', 'Brand Name', '', concept_code, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Brand Name' from br_name_list
 ;
 --NEW Ingredients
-insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
-select                           CONCEPT_NAME_1,'Drug', 'dm+d', 'Ingredient', 'S', concept_code_1, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from ingred_to_ingred_FINAL_BY_Lena where concept_code_1 like 'OMOP%'
+insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
+select                           CONCEPT_NAME_1,'Drug', 'dm+d', 'Ingredient', 'S', concept_code_1, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient'  from ingred_to_ingred_FINAL_BY_Lena where concept_code_1 like 'OMOP%'
 ;
 --NEW Forms
-insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
- select distinct                          CONCEPT_NAME_2,'Drug', 'dm+d', 'Dose Form', '', concept_code_2, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from DR_TO_DOSE_form_full where concept_code_2 like 'OMOP%'
+insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
+ select distinct                          CONCEPT_NAME_2,'Drug', 'dm+d', 'Dose Form', '', concept_code_2, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Form' from DR_TO_DOSE_form_full where concept_code_2 like 'OMOP%'
 ;
 --NEW Pack components 
-insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
- select distinct                          DRUG_NEW_NAME,'Drug', 'dm+d', 'Clinical Drug', 'S', DRUG_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from PACK_DRUG_TO_CODE_2_2  where DRUG_CODE like 'OMOP%'
+insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
+ select distinct                          DRUG_NEW_NAME,'Drug', 'dm+d', 'Drug Product', 'S', DRUG_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'VMP' from PACK_DRUG_TO_CODE_2_2  where DRUG_CODE like 'OMOP%'
 ;
 --modify classes for Packs
 update drug_concept_stage set concept_class_id = 'Drug Pack' where concept_code  in (select PACK_CONCEPT_CODE from PACK_CONTENT )
 ;
 --add units 
-insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
- select distinct                          CONCEPT_NAME_1,'Unit', 'dm+d', 'Unit', '', CONCEPT_CODE_1, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from unit_for_ucum_done 
+insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
+ select distinct                          CONCEPT_NAME_1,'Unit', 'dm+d', 'Unit', '', CONCEPT_CODE_1, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Unit' from unit_for_ucum_done 
  ;
 --proper 'S'
 update  drug_concept_stage
@@ -1196,15 +1213,16 @@ update drug_concept_stage
 set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
   ;
   --add newly created ingredients
-  insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
- select distinct                  INGR_NAME        ,'Drug', 'dm+d', 'Ingredient', 'S', INGR_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from lost_ingr_to_rx_with_OMOP 
+  insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
+ select distinct                  INGR_NAME        ,'Drug', 'dm+d', 'Ingredient', 'S', INGR_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOP 
 ;
-  insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
- select distinct                  'hypromellose'        ,'Drug', 'dm+d', 'Ingredient', 'S', 'OMOP28671', TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '' from lost_ingr_to_rx_with_OMOp 
+  insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,source_concept_class_id)
+ select distinct                  'hypromellose'        ,'Drug', 'dm+d', 'Ingredient', 'S', 'OMOP28671', TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOp 
  ;
 -- select * from drug_concept_stage where concept_code = 'OMOP28663'
+update drug_concept_stage set concept_class_id = 'Drug Product' where concept_class_id like '%Pack%' or concept_class_id like '%Drug%'
+;
 commit;
-
 
 DELETE
 FROM RELATIONSHIP_TO_CONCEPT
@@ -1364,6 +1382,7 @@ and c.concept_class_id = 'Dose Form'
 )
 and  ir.concept_code_1 = ds.drug_concept_code )
 ;
+drop table ds_brand_update;
 create table ds_brand_update as 
 select CONCEPT_CODE_1, CONCEPT_NAME_1 from branded_to_clinical 
 join drug_concept_stage on CONCEPT_CODE_1 = concept_code and domain_id ='Drug' and invalid_reason is null
@@ -1380,8 +1399,10 @@ set amount_value = (select regexp_substr ( regexp_substr (concept_name_1, '[[:di
 where exists (select 1 from ds_brand_update where concept_code_1 = drug_concept_code)
 and drug_concept_code not in ('16636811000001107', '16636911000001102', '15650711000001103', '15651111000001105' )--Packs and vaccines
 ;
+select * from ds_stage where drug_concept_code  in ('16636811000001107', '16636911000001102', '15650711000001103', '15651111000001105' )
+;
 commit
-; 
+;
 --final update of ds_stage, sometimes Clinical Drug has no dosage, but Branded Drugs related to them do
 --update could be done easily
 /*
@@ -1393,19 +1414,14 @@ and amount_value is null and numerator_value is null
 ;
 */
 drop sequence new_vocab;
- create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder; -- change to procedure
-drop table name_replace;
- create table name_replace as 
- select 'OMOP'||new_vocab.nextval as concept_code, concept_name from (
-select distinct  concept_name from drug_concept_stage where concept_code like 'OMOP%')
-;
-drop  table code_replace;
-create table code_replace as
-select a.concept_code as old_code, b.concept_code as new_code
-from drug_concept_stage a join name_replace b on a.concept_name = b.concept_name
-where a.concept_code like 'OMOP%'
-;
-select * from code_replace where old_code like 'OMOP%'
+ create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder
+ ; -- change to procedure
+drop table code_replace;
+ create table code_replace as 
+ select 'OMOP'||new_vocab.nextval as new_code, concept_code as old_code from (
+select distinct  concept_code from drug_concept_stage where concept_code like 'OMOP%' order by (cast ( regexp_substr( concept_code, '\d+') as int))
+)
+
 ;
 update drug_concept_stage a set concept_code = (select new_code from code_replace b where a.concept_code = b.old_code) 
 where a.concept_code like 'OMOP%'
@@ -1449,12 +1465,11 @@ drop table relationship_to_concept_v0;
 --concept_synonym_stage,dm+d part, need to discuss with Christian about RxNorm Extension part
 insert into concept_synonym_stage (SYNONYM_CONCEPT_ID,SYNONYM_NAME,SYNONYM_CONCEPT_CODE,SYNONYM_VOCABULARY_ID,LANGUAGE_CONCEPT_ID)
 select '', concept_name, concept_code, 'dm+d', 4093769 from drug_concept_stage where concept_code not like 'OMOP%'
-commit
 ;
 UPDATE DS_STAGE
    SET AMOUNT_VALUE = 12.5,
        AMOUNT_UNIT = 'mg'
 WHERE DRUG_CONCEPT_CODE = '18988111000001104'
 AND   INGREDIENT_CONCEPT_CODE = '387525002';
-
-
+commit
+;
