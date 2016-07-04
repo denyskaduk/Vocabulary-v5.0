@@ -131,6 +131,8 @@ update PACK_DRUG_TO_CODE_2_2
 set PACK_NAME=regexp_replace(PACK_NAME,'"')
 --for now remain PACK_DRUG_TO_CODE_2_2 as manual without rebuilding
 ;
+SELECT * FROM PACK_DRUG_TO_CODE_2_2
+;
 --Box to drug - 1 step
 drop table Box_to_Drug ;
 create table Box_to_Drug as (
@@ -308,6 +310,8 @@ INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_COD
 INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP27',  'Pyridoxine 50mg/5ml / Thiamine 250mg/5ml / Riboflavin 4mg/5ml oral solution',  '385023001',  'Oral solution');
 INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP28',  'Codeine / Paracetamol tablets',  '385055001',  'Tablet');
 INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP29',  'Aprotinin / Fibrinogen / Factor XIII solution',  '385219001',  'Solution for injection');
+INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP101',  'Rebif 8.8micrograms/0.1ml (2.4million units) solution for injection 1.5ml cartridges (Merck Serono Ltd)',  '385219001',  'Solution for injection');
+INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP100',  'Rebif 22micrograms/0.25ml (6million units) solution for injection 1.5ml cartridges (Merck Serono Ltd)',  '385219001',  'Solution for injection');
 ;   
 --define non-drugs, clinical part of 
 drop table clnical_non_drug;
@@ -543,6 +547,7 @@ AND   ingredient_concept_code = 'OMOP28664';
 ;
 --select * from ds_all_tmp where INGREDIENT_CONCEPT_CODE is null;
 --select * from drug_to_ingr a  join devv5.concept c on a.concept_code_2 = cast (c.concept_id  as varchar (250)) and c.concept_class_id ='Ingredient' and vocabulary_id = 'RxNorm'
+select * from ds_all_tmp where concept_code = '16436511000001106'
 ;
 update ds_all_tmp set dosage = replace (dosage, '"') 
 ;
@@ -780,10 +785,11 @@ update ds_stage a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )=
  ds_stage b where a.drug_concept_code = b.drug_concept_code 
  and a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null )
  ;
+ --!!! 
  --need to comment with example
- update ds_stage set ingredient_concept_code = 'OMOP28664' where ingredient_concept_code =  '798336'
+ update ds_stage set ingredient_concept_code = 'OMOP18' where ingredient_concept_code =  '798336' ;
 ;
-update ds_stage set ingredient_concept_code = 'OMOP28671' where ingredient_concept_code =  '902251'
+update ds_stage set ingredient_concept_code = 'OMOP17' where ingredient_concept_code =  '902251'
 ;
 delete from ds_stage where coalesce (amount_unit, numerator_unit) is null and ingredient_concept_code = '3588811000001104'
 ;
@@ -1110,10 +1116,10 @@ insert into RELATIONSHIP_TO_CONCEPT (CONCEPT_CODE_1, VOCABULARY_ID_1 ,   CONCEPT
 select distinct INGR_CODE, 'dm+d', RXNORM_ID, 1, '' from lost_ingr_to_rx_with_OMOP
 ;
 insert into RELATIONSHIP_TO_CONCEPT (CONCEPT_CODE_1, VOCABULARY_ID_1 ,   CONCEPT_ID_2  ,PRECEDENCE, CONVERSION_FACTOR) 
-values ( 'OMOP28664', 'dm+d', 798336, 1, '')
+values ( 'OMOP18', 'dm+d', 798336, 1, '')
 ;
 insert into RELATIONSHIP_TO_CONCEPT (CONCEPT_CODE_1, VOCABULARY_ID_1 ,   CONCEPT_ID_2  ,PRECEDENCE, CONVERSION_FACTOR) 
-values ( 'OMOP28671', 'dm+d', 902251, 1, '')
+values ( 'OMOP17', 'dm+d', 902251, 1, '')
 ;
 create table RELATIONSHIP_TO_CONCEPT_tmp as select distinct * from RELATIONSHIP_TO_CONCEPT
 ;
@@ -1214,10 +1220,7 @@ set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
   ;
   --add newly created ingredients
   insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
- select distinct                  INGR_NAME        ,'Drug', 'dm+d', 'Ingredient', 'S', INGR_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOP 
-;
-  insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,source_concept_class_id)
- select distinct                  'hypromellose'        ,'Drug', 'dm+d', 'Ingredient', 'S', 'OMOP28671', TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOp 
+ select distinct                  INGR_NAME        ,'Drug', 'dm+d', 'Ingredient', 'S', INGR_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOP  where INGR_CODE !='OMOP18'
  ;
 -- select * from drug_concept_stage where concept_code = 'OMOP28663'
 update drug_concept_stage set concept_class_id = 'Drug Product' where concept_class_id like '%Pack%' or concept_class_id like '%Drug%'
@@ -1414,7 +1417,7 @@ select distinct  concept_code from drug_concept_stage where concept_code like 'O
 ;
 update drug_concept_stage a set concept_code = (select new_code from code_replace b where a.concept_code = b.old_code) 
 where a.concept_code like 'OMOP%'
-;
+;--select * from code_replace where old_code ='OMOP28663';
 commit
 ;
 update relationship_to_concept a  set concept_code_1 = (select new_code from code_replace b where a.concept_code_1 = b.old_code)
@@ -1423,6 +1426,8 @@ where a.concept_code_1 like 'OMOP%'
 ;
 update ds_stage a  set ingredient_concept_code = (select new_code from code_replace b where a.ingredient_concept_code = b.old_code)
 where a.ingredient_concept_code like 'OMOP%'
+;
+commit
 ;
 update ds_stage a  set drug_concept_code = (select new_code from code_replace b where a.drug_concept_code = b.old_code)
 where a.drug_concept_code like 'OMOP%'
@@ -1438,18 +1443,8 @@ where a.concept_code_2 like 'OMOP%'
 ;
 update pack_content a  set DRUG_CONCEPT_CODE = (select new_code from code_replace b where a.DRUG_CONCEPT_CODE = b.old_code)
 where a.DRUG_CONCEPT_CODE like 'OMOP%'
-;commit
 ;
---delete duplicates from ds_stage
-create table drug_concept_stage_v0 as select distinct * from  drug_concept_stage
-;
-drop table drug_concept_stage
-;
-create table drug_concept_stage as  select distinct * from  drug_concept_stage_v0
-;
-drop table drug_concept_stage_v0;
 commit;
-
 create table relationship_to_concept_v0 as select distinct * from  relationship_to_concept
 ;
 drop table relationship_to_concept
@@ -1468,6 +1463,7 @@ UPDATE DS_STAGE
 WHERE DRUG_CONCEPT_CODE = '18988111000001104'
 AND   INGREDIENT_CONCEPT_CODE = '387525002'
 ;
-commit
+update drug_concept_stage
+set SOURCE_CONCEPT_CLASS_ID ='Supplier' where CONCEPT_CLASS_ID = 'Supplier'
 ;
-
+commit

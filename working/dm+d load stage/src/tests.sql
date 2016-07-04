@@ -802,3 +802,5 @@ join drug_concept_stage c on ingredient_concept_code = c.concept_code
  select * from pack_content where pack_concept_code in ('16636811000001107', '16636911000001102')
  ;
  select * from drug_concept_stage where concept_code ='OMOP251'
+ ;
+ 
