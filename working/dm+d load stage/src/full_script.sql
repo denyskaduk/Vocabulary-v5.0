@@ -1,4 +1,3 @@
-
 --"reboot" drug_concept_stage
 drop table drug_concept_stage
 ;
@@ -528,6 +527,7 @@ union
 -- lost ingredients
 select '','',drug_name, DRUG_CODE, INGR_CODE,INGR_NAME, ''  from  lost_ingr_to_rx_with_OMOP --!!!
 ;
+--need to redefine 
 DELETE
 FROM DS_ALL_TMP
 WHERE DOSAGE = '22micrograms/2.2ml'
@@ -552,6 +552,11 @@ select * from ds_all_tmp where concept_code = '16436511000001106'
 update ds_all_tmp set dosage = replace (dosage, '"') 
 ;
 update ds_all_tmp set dosage = trim (dosage) 
+;
+--add volume 
+ update ds_all_tmp set volume = regexp_substr (regexp_substr (concept_name, '[[:digit:]\.]+\s*(ml|g|litre|mg) (pre-filled syringes|bags|bottles|vials|applicators|sachets|ampoules)'), '[[:digit:]\.]+\s*(ml|g|litre|mg)')
+where regexp_substr (regexp_substr (concept_name, '[[:digit:]\.]+\s*(ml|g|litre|mg) (pre-filled syringes|bags|bottles|vials|applicators|sachets|ampoules)'), '[[:digit:]\.]+\s*(ml|g|litre|mg)') is not null
+ and (  regexp_substr (regexp_substr (concept_name, '[[:digit:]\.]+\s*(ml|g|litre|mg) (pre-filled syringes|bags|bottles|vials|applicators|sachets|ampoules)'), '[[:digit:]\.]+\s*(ml|g|litre|mg)') != dosage or dosage is null)
 ;
 drop table ds_all;
 create table ds_all as 
@@ -598,10 +603,11 @@ case when
 (regexp_substr (dosage, '[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s)*|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit|nanogram(s)*|x|ppm| Kallikrein inactivator units|kBq|MBq|molar|micromol|microlitres|million units)/[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|microlitres|hour(s)*|h|square cm|unit dose|drop)') = dosage
 or regexp_like (dosage, '%')
 ) and volume is null
-then regexp_substr (dosage, '(g|dose|ml|mg|ampoule|litre|hour(s)*|h*|square cm|microlitres|unit dose|drop)$')
+then regexp_substr (dosage, '(g|dose|ml|mg|ampoule|litre|hour(s)*|h*|square cm|microlitres|unit dose|drop)$') 
 when volume is not  null then  regexp_replace (volume, '[[:digit:]\,\.]+')
 else null end
 as denominator_unit,
+
 concept_code, concept_name, DOSAGE, DRUG_COMP, INGREDIENT_CONCEPT_CODE, INGREDIENT_CONCEPT_NAME
 from ds_all_tmp 
 ;
@@ -663,7 +669,7 @@ join ds_all b on a.concept_code_2 = b.concept_code
 where a.AMOUNT_VALUE is not null
 
 union 
-
+--what's this?
 select distinct 
 a.concept_code_1, b.INGREDIENT_CONCEPT_CODE, cast (b.AMOUNT_VALUE as varchar(250)) as AMOUNT_VALUE, b.AMOUNT_UNIT ,
 cast (b.numerator_value as float) as numerator_value, b.numerator_unit,
@@ -1467,3 +1473,65 @@ update drug_concept_stage
 set SOURCE_CONCEPT_CLASS_ID ='Supplier' where CONCEPT_CLASS_ID = 'Supplier'
 ;
 commit
+;
+--update ds_stage changing % to mg/ml, mg/g, etc.
+--simple, when we have denominator_unit so we can define numerator based on denominator_unit
+update ds_stage 
+set numerator_value =  DENOMINATOR_VALUE * NUMERATOR_VALUE * 10, 
+numerator_unit = 'mg'
+where numerator_unit = '%' and DENOMINATOR_UNIT in ('ml', 'gram', 'g')
+;
+update ds_stage 
+set numerator_value =  DENOMINATOR_VALUE * NUMERATOR_VALUE * 0.01, 
+numerator_unit = 'mg'
+where numerator_unit = '%' and DENOMINATOR_UNIT in ('mg')
+;
+update ds_stage 
+set numerator_value =  DENOMINATOR_VALUE * NUMERATOR_VALUE * 10, 
+numerator_unit = 'g'
+where numerator_unit = '%' and DENOMINATOR_UNIT in ('litre')
+;
+--use relationship between drug boxes ( Quant drugs) and Clinical (Branded) Drugs
+ update ds_stage ds
+set numerator_value = NUMERATOR_VALUE * 10, 
+numerator_unit = 'mg',
+denominator_unit = 'gram'
+  where exists (select 1 from box_to_drug b join ds_stage ds2 on ds2.drug_concept_code = b.concept_code_1
+ where ds2.ingredient_concept_code = ds.ingredient_concept_code and ds.drug_concept_code = b.concept_code_2 and ds.NUMERATOR_UNIT ='%' and  ds2.NUMERATOR_UNIT !='%' and ds2.DENOMINATOR_UNIT in ( 'gram', 'g') )
+ ;
+ update ds_stage ds
+set numerator_value = NUMERATOR_VALUE * 10, 
+numerator_unit = 'mg',
+denominator_unit = 'ml'
+  where exists (select 1 from box_to_drug b join ds_stage ds2 on ds2.drug_concept_code = b.concept_code_1
+ where ds2.ingredient_concept_code = ds.ingredient_concept_code and ds.drug_concept_code = b.concept_code_2 and ds.NUMERATOR_UNIT ='%' and  ds2.NUMERATOR_UNIT !='%' and ds2.DENOMINATOR_UNIT in ( 'ml') )
+ ;
+  update ds_stage ds
+set numerator_value = NUMERATOR_VALUE * 10, 
+numerator_unit = 'mg',
+denominator_unit = 'g'
+  where exists (select 1 from box_to_drug b join ds_stage ds2 on ds2.drug_concept_code = b.concept_code_1
+ where ds2.ingredient_concept_code = ds.ingredient_concept_code and ds.drug_concept_code = b.concept_code_2 and ds.NUMERATOR_UNIT ='%' and  ds2.NUMERATOR_UNIT !='%' and ds2.DENOMINATOR_UNIT in ( 'litre') )
+ ;
+ --some drugs don't have such a relationships or drug boxes ( Quant drugs) still don't have Quant info required
+  --if denominator is still null, means that drug box also doesn't contain quant factor, mg/ml is not a default , make analysis using concept_name
+ update ds_stage ds
+set numerator_value = NUMERATOR_VALUE * 10, 
+numerator_unit = 'mg',
+denominator_unit = 'ml'
+where numerator_unit = '%' 
+and denominator_unit is null and denominator_value is null
+and exists (select 1 from drug_concept_stage dcs  where dcs.concept_code  = ds.drug_concept_code and regexp_like (concept_name, 'vial|drops|foam'))
+;
+--weigth / weight
+ update ds_stage ds
+set numerator_value = NUMERATOR_VALUE * 10, 
+numerator_unit = 'mg',
+denominator_unit = 'g'
+where numerator_unit = '%' 
+and denominator_unit is null and denominator_value is null
+and exists (select 1 from drug_concept_stage dcs  where dcs.concept_code  = ds.drug_concept_code and not regexp_like (concept_name, 'vial|drops|foam'))
+;
+commit
+;
+
