@@ -803,4 +803,32 @@ join drug_concept_stage c on ingredient_concept_code = c.concept_code
  ;
  select * from drug_concept_stage where concept_code ='OMOP251'
  ;
- 
+delete from ds_stage where coalesce (amount_unit, numerator_unit) is null and ingredient_concept_code = '3588811000001104'
+;
+select distinct DRUG_CODE,DRUG_NEW_NAME,coalesce (CONCEPT_CODE_2, concept_code_1) as CONCEPT_CODE_2 , coalesce (CONCEPT_name_2, concept_name_1) as CONCEPT_name_2
+ from PACK_DRUG_TO_CODE_2_2 --!!! packs determined manually 
+  a join INGRED_TO_INGRED_FINAL_BY_LENA b on a.ingredient_name=b.concept_name_1 where a.drug_code like '%OMOP%' 
+  ;
+  select * from PACK_DRUG_TO_CODE_2_2
+  ;
+  Rebif 8.8micrograms/0.1ml (2.4million units) with 22micrograms/0.25ml (6million units) solution for injection 1.5ml cartridges initiation pack (Merck Serono Ltd)
+  ;
+  select * from  
+ds_all_tmp where INGREDIENT_CONCEPT_CODE in ('OMOP28664', 'OMOP28671')
+;
+  select * from  drug_to_ingr where concept_code_2 not in (Select concept_code from drug_concept_stage)
+  ;
+  select * from INGRED_TO_INGRED_FINAL_BY_LENA where concept_code_1 like 'OMOP%'
+  ;
+  select * from concept where concept_id =798336
+  ;
+   select distinct s.drug_concept_code, ingredient_concept_code ,a.concept_name,'ds_stage has ingredient_codes absent in drug_concept_stage' from ds_stage s 
+  left join drug_concept_stage a on a.concept_code = s.drug_concept_code and a.concept_class_id like '%Drug%'
+  left join drug_concept_stage b on b.concept_code = s.INGREDIENT_CONCEPT_CODE and b.concept_class_id = 'Ingredient'
+  where b.concept_code is null 
+  ;
+  select * from ds_stage
+join drug_concept_stage   on concept_code = drug_concept_code
+ where numerator_unit = '%'
+  ;
+  select * from 

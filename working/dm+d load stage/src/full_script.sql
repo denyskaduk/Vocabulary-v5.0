@@ -316,7 +316,7 @@ INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_COD
 drop table clnical_non_drug;
 create table clnical_non_drug as
 select * from drug_concept_stage where (concept_code not in (select concept_code_1 from clin_dr_to_dose_form where concept_code_1 is not null)  and invalid_reason is  null
-or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva|cylinder', 'i')
+or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva|cylinder|Bq', 'i')
 or DOMAIN_ID ='Device'
 ) and concept_class_id = 'Clinical Drug'
 ;
@@ -981,7 +981,7 @@ join Box_to_drug x on x.concept_code_2 = a.concept_code
 truncate table INTERNAL_RELATIONSHIP_STAGE;
 --Drug to ingredient
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
-select distinct drug_concept_code, ingredient_concept_code from ds_stage
+select distinct drug_concept_code, ingredient_concept_code from ds_stage 
 ;
 --Drug to Form
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
@@ -1184,7 +1184,13 @@ drug_concept_stage_existing
 ;
 update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_code in (select concept_code from non_drug_full)
 ;
+--update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_name like '%Bq%'
+;
 update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_code in ('3378311000001103','3378411000001105')
+;
+delete from ds_stage where exists (select 1 from drug_concept_stage where drug_concept_code = concept_code and domain_id = 'Device')
+;
+--delete from ds_stage where exists (select 1 from drug_concept_stage where drug_concept_code = concept_code and domain_id = 'Device')
 ;
 update drug_concept_stage set domain_id = 'Drug' where concept_code not in (select concept_code from non_drug_full)
 ;
@@ -1534,4 +1540,5 @@ and exists (select 1 from drug_concept_stage dcs  where dcs.concept_code  = ds.d
 ;
 commit
 ;
+
 
