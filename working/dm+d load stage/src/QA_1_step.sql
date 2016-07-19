@@ -222,6 +222,7 @@ create index  idx_dcs_code on  Drug_concept_stage (concept_code ASC);
 
 commit
 ;
+/*
 create table comb_check_tmp as 
 select distinct d.concept_code, 
   case when ds.concept_code is null then 0 else 1 end as supplier,
@@ -249,3 +250,4 @@ create table comb_check as
  select ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier, count(*) from comb_check_tmp 
   group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier
   ;
+*/
