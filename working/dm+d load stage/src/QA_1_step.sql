@@ -16,15 +16,16 @@
   -- 2. ds_stage
   --look if we have some strange amount_units
   --expand this table with units, need to think about
-   select distinct drug_concept_code, 'amount_unit doesnt exist in concept_table' from ds_stage where amount_unit not in (select concept_name from drug_concept_stage where concept_class_id ='Unit')
-   union
-  select distinct drug_concept_code, 'amount_unit doesnt exist in expected list' from ds_stage where UPPER ( amount_unit) not in ('G', 'MG', 'KG', 'UNITS', 'UNIT','MIU','IU', 'MMOL', 'MOL','CELL','MU','L', 'ML', 'MEQ', 'MCG','CFU', 'MCCI','CH','DOSE','GALU','K','D','M','C','X','DH','B','PPM','TM','XMK')
+  select distinct drug_concept_code, 'amount_unit doesnt exist in concept_table' from ds_stage where amount_unit not in (select concept_name from drug_concept_stage where concept_class_id ='Unit')
+  union
+  select distinct drug_concept_code, 'amount_unit doesnt exist in expected list' from ds_stage not in ('G', 'MG', 'KG', 'UNITS', 'UNIT','MIU','IU', 'MMOL', 'MOL','CELL','IR','MU','L', 'ML', 'MEQ', 
+  'MCG','CFU', 'MCCI','CH','DOSE','GALU','K','D','M','C','X','DH','B','PPM','TM','XMK','CCID_50','U.CEIP','MILLION IU','TCID_50','U','SQ-T','NG','NANOKATAL')
   union
   select distinct drug_concept_code, 'numerator_unit doesnt exist in expected list'  from ds_stage where UPPER ( numerator_unit) not in (
-  'LF','TUB','U','LOG10 PFU','KIU','CCID50','MCMOL','%','GAL','PFU','LOG10 TCID50','CMK','MCL','FFU',
-  'G', 'MG', 'KG', 'UNITS', 'UNIT','MIU','IU', 'MMOL', 'MOL','CELL','MU','L', 'ML', 'MEQ', 'MCG','CFU', 'MCCI','CH','DOSE','GALU','K','D','M','C','X','DH','B','PPM','TM','XMK')
+  'LF','TUB','U','LOG10 PFU','KIU','CCID50','MCMOL','%','GAL','PFU','LOG10 TCID50','CMK','MCL','FFU', 'G', 'MG', 'KG', 'UNITS', 'UNIT','MIU','IU', 'MMOL', 'MOL','CELL','MU','L', 'ML', 'MEQ', 'MCG','CFU',
+  'MCCI','CH','DOSE','GALU','K','D','M','C','X','DH','B','PPM','TM','XMK','UFP','UNIT FEIBA','PPM MOLE','CCID_50','MILLION U','DL50','ATU','MICROLITER','U.CEIP','MILLION IU')
   union
-  select distinct drug_concept_code, 'denominator_unit doesnt exist in expected list' from ds_stage where denominator_unit not in ('MG','Kg','ACT','SQ CM','CC','UNIT','CM','C','GM','TM','ML','L','G','HOUR','MCL')
+  select distinct drug_concept_code, 'denominator_unit doesnt exist in expected list' from ds_stage where UPPER (denominator_unit) not in ('MG','KG','ACT','SQ CM','CC','UNIT','CM','C','GM','TM','ML','L','G','HOUR','MCL','IU','CM²')
   union
   -- drug codes are not exist in a drug_concept_stage but present in ds_stage
   select distinct s.drug_concept_code, 'ds_stage has drug_codes absent in drug_concept_stage' from ds_stage s 
