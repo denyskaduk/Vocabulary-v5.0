@@ -18,7 +18,7 @@
   --expand this table with units, need to think about
   select distinct drug_concept_code, 'amount_unit doesnt exist in concept_table' from ds_stage where amount_unit not in (select concept_name from drug_concept_stage where concept_class_id ='Unit')
   union
-  select distinct drug_concept_code, 'amount_unit doesnt exist in expected list' from ds_stage not in ('G', 'MG', 'KG', 'UNITS', 'UNIT','MIU','IU', 'MMOL', 'MOL','CELL','IR','MU','L', 'ML', 'MEQ', 
+  select distinct drug_concept_code, 'amount_unit doesnt exist in expected list' from ds_stage where UPPER (amount_unit) not in ('G', 'MG', 'KG', 'UNITS', 'UNIT','MIU','IU', 'MMOL', 'MOL','CELL','IR','MU','L', 'ML', 'MEQ', 
   'MCG','CFU', 'MCCI','CH','DOSE','GALU','K','D','M','C','X','DH','B','PPM','TM','XMK','CCID_50','U.CEIP','MILLION IU','TCID_50','U','SQ-T','NG','NANOKATAL')
   union
   select distinct drug_concept_code, 'numerator_unit doesnt exist in expected list'  from ds_stage where UPPER ( numerator_unit) not in (
