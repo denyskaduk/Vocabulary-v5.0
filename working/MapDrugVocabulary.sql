@@ -1,4 +1,4 @@
-/**************************************************
+﻿/**************************************************
 * This script takes a drug vocabulary q and       *
 * compares it to the existing drug vocabulary r   *
 * The new vocabulary must be provided in the same *

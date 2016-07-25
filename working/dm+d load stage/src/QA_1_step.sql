@@ -78,13 +78,13 @@
   ) and  domain_id = 'Drug'
   union
   --Drug to Ingredient
-  select distinct concept_code,'Missing relationship to Ingredient'  from drug_concept_stage where concept_class_id like '%Drug%' and concept_code not in(
+  select distinct concept_code , 'Missing relationship to Ingredient'  from drug_concept_stage where concept_class_id like '%Drug%' and concept_code not in(
   select a.concept_code from  drug_concept_stage a 
   join internal_relationship_stage s on s.concept_code_1= a.concept_code  
   join drug_concept_stage b on b.concept_code = s.concept_code_2
    and  a.concept_class_id like '%Drug%' and b.concept_class_id ='Ingredient'
   ) and concept_class_id not like '%Pack%'
-  and domain_id = 'Drug'
+  and domain_id = 'Drug' and concept_code not in (select pack_concept_code from pack_content) and invalid_reason is null
 
   union
   --Drug (non Component) to Form
@@ -94,7 +94,7 @@
   join drug_concept_stage b on b.concept_code = s.concept_code_2
    and  a.concept_class_id like '%Drug%' and a.concept_class_id not like '%Comp%' and b.concept_class_id ='Dose Form' 
   )
-  and domain_id = 'Drug' and concept_class_id not like '%Pack%'
+  and domain_id = 'Drug' and concept_class_id not like '%Pack%' and concept_code not in (select pack_concept_code from pack_content) and invalid_reason is null 
   union
   --several brand names
   select distinct a.concept_code,'Drug has more than one brand names' from drug_concept_stage a 

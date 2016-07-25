@@ -480,11 +480,11 @@
       ' ' as dose_form_code,
       ' ' as brand_code,
       0 as box_size,
-      dcsm.concept_code as mf_code,
+     nvl( dcsm.concept_code,' ') as mf_code,
       'Marketed Product' as concept_class_id
     from drug_concept_stage dcs 
     join internal_relationship_stage irs ON irs.concept_code_1=dcs.concept_code
-    join drug_concept_stage dcsm ON irs.concept_code_2=dcsm.concept_code AND dcsm.concept_class_id = 'Supplier'
+left join drug_concept_stage dcsm ON irs.concept_code_2=dcsm.concept_code AND dcsm.concept_class_id = 'Supplier'
     where dcs.concept_class_id like '%Pack' and dcs.domain_id='Drug'
     ;
     commit;

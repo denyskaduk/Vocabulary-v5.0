@@ -831,4 +831,191 @@ ds_all_tmp where INGREDIENT_CONCEPT_CODE in ('OMOP28664', 'OMOP28671')
 join drug_concept_stage   on concept_code = drug_concept_code
  where numerator_unit = '%'
   ;
-  select * from 
+select * from (
+  select 
+    r.concept_code_1,
+    nvl(ar.vocabulary_id, 'RxNorm Extension') as a_vocab,
+    nvl(ar.concept_name, ad.concept_name) as a_name,
+    nvl(ar.concept_class_id, ad.concept_class_id) as a_class,
+    r.relationship_id,
+    dd.concept_code,
+    dd.concept_name as d_name,
+    dd.concept_class_id as d_class
+  from concept_relationship_stage r
+  left join concept ar on ar.concept_code=r.concept_code_1 and ar.vocabulary_id='RxNorm' and r.vocabulary_id_1='RxNorm'
+  left join concept_stage ad on ad.concept_code=r.concept_code_1 and r.vocabulary_id_1='RxNorm Extension'
+  join concept_stage dd on dd.concept_code=r.concept_code_2
+)
+where rownum < 1000
+;
+select distinct A_VOCAB,A_CLASS,RELATIONSHIP_ID,D_CLASS from (
+  select 
+    r.concept_code_1,
+    nvl(ar.vocabulary_id, 'RxNorm Extension') as a_vocab,
+    nvl(ar.concept_name, ad.concept_name) as a_name,
+    nvl(ar.concept_class_id, ad.concept_class_id) as a_class,
+    r.relationship_id,
+    dd.concept_code,
+    dd.concept_name as d_name,
+    dd.concept_class_id as d_class
+  from concept_relationship_stage r
+  left join concept ar on ar.concept_code=r.concept_code_1 and ar.vocabulary_id='RxNorm' and r.vocabulary_id_1='RxNorm'
+  left join concept_stage ad on ad.concept_code=r.concept_code_1 and r.vocabulary_id_1='RxNorm Extension'
+  join concept_stage dd on dd.concept_code=r.concept_code_2
+)
+--where rownum < 1000
+;
+select * from (
+  select 
+    r.concept_code_1,
+    nvl(ar.vocabulary_id, 'RxNorm Extension') as a_vocab,
+    nvl(ar.concept_name, ad.concept_name) as a_name,
+    nvl(ar.concept_class_id, ad.concept_class_id) as a_class,
+    r.relationship_id,
+    dd.concept_code,
+    dd.concept_name as d_name,
+    dd.concept_class_id as d_class
+  from concept_relationship_stage r
+  left join concept ar on ar.concept_code=r.concept_code_1 and ar.vocabulary_id='RxNorm' and r.vocabulary_id_1='RxNorm'
+  left join concept_stage ad on ad.concept_code=r.concept_code_1 and r.vocabulary_id_1='RxNorm Extension'
+  join concept_stage dd on dd.concept_code=r.concept_code_2
+)
+where a_class is null
+;
+select * from drug_concept_stage where concept_code = '391873006'
+;
+;
+select * from concept_stage where concept_code = '391873006'
+;
+select * from relationship_to_concept where concept_code_1  = '350576006'
+;
+select   count (1) from drug_concept_Stage where concept_code not in (Select concept_code from concept_stage)
+;
+select * from concept_stage where vocabulary_id = 'RxNorm Extension' and  concept_code  not like 'OMOP%' and  concept_code  not like 'XXX%'
+;
+select * from concept_stage where vocabulary_id = 'dm+d' --and  concept_code  not like 'OMOP%' and  concept_code  not like 'XXX%'
+;
+select * from (
+  select 
+    r.concept_code_1,
+    nvl(ar.vocabulary_id, 'RxNorm Extension') as a_vocab,
+    nvl(ar.concept_name, ad.concept_name) as a_name,
+    nvl(ar.concept_class_id, ad.concept_class_id) as a_class,
+    r.relationship_id,
+    dd.concept_code,
+    dd.concept_name as d_name,
+    dd.concept_class_id as d_class
+  from concept_relationship_stage r
+  left join concept ar on ar.concept_code=r.concept_code_1 and ar.vocabulary_id='RxNorm' and r.vocabulary_id_1='RxNorm'
+  left join concept_stage ad on ad.concept_code=r.concept_code_1 and r.vocabulary_id_1='RxNorm Extension'
+  join concept_stage dd on dd.concept_code=r.concept_code_2
+) a  join concept_stage  cs on cs.concept_code  = a.concept_code and  a_class = 'Dose Form' 
+where cs.concept_class_id like '%Drug%' 
+and rownum < 300
+;
+
+select distinct d_class from (
+  select 
+    r.concept_code_1,
+    nvl(ar.vocabulary_id, 'RxNorm Extension') as a_vocab,
+    nvl(ar.concept_name, ad.concept_name) as a_name,
+    nvl(ar.concept_class_id, ad.concept_class_id) as a_class,
+    r.relationship_id,
+    dd.concept_code,
+    dd.concept_name as d_name,
+    dd.concept_class_id as d_class
+  from concept_relationship_stage r
+  left join concept ar on ar.concept_code=r.concept_code_1 and ar.vocabulary_id='RxNorm' and r.vocabulary_id_1='RxNorm'
+  left join concept_stage ad on ad.concept_code=r.concept_code_1 and r.vocabulary_id_1='RxNorm Extension'
+  join concept_stage dd on dd.concept_code=r.concept_code_2
+)
+;
+select * from ds_stage 
+join drug_concept_stage on concept_code = drug_concept_code
+where drug_concept_code in (
+  select drug_concept_code from (
+  select drug_concept_code, ingredient_concept_code, count(*) as cnt
+  from ds_stage 
+  group by drug_concept_code, ingredient_concept_code having count(*)>1))
+  ;
+    select * from relationship_to_concept r 
+  join drug_concept_stage a on a.concept_code= r.concept_code_1 
+  left join devv5.concept c on c.concept_id = r.concept_id_2  
+  where  c.concept_name is  null
+  and a.domain_id = 'Drug'
+  ;
+  select * from concept where concept_name ='Implant'
+  ;
+   select * from concept where concept_id = '721656'
+   ;
+     select a.drug_concept_code, 'different dosage for the same drug-ingredient combination' 
+  from ds_stage a join ds_stage b on a.drug_concept_code = b.drug_concept_code and a.INGREDIENT_CONCEPT_CODE = b.INGREDIENT_CONCEPT_CODE and (
+  a.numerator_value != b.numerator_value or a.numerator_unit != b.numerator_unit or a.DENOMINATOR_VALUE != b.DENOMINATOR_VALUE or a.DENOMINATOR_unit != b.DENOMINATOR_unit
+  or a.numerator_value is null and  b.numerator_value is not null or a.numerator_unit is null and  b.numerator_unit is not null or a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null or 
+  a.DENOMINATOR_unit is null and b.DENOMINATOR_unit is not null
+  )
+  ;
+      select * from ds_stage s 
+  left join drug_concept_stage a on a.concept_code = s.drug_concept_code and a.concept_class_id like '%Drug%'
+  left join drug_concept_stage b on b.concept_code = s.INGREDIENT_CONCEPT_CODE and b.concept_class_id = 'Ingredient'
+  where b.concept_code is null
+  ;
+  select * from ds_stage
+  join drug_concept_stage  on concept_code = drug_concept_code 
+ where INGREDIENT_CONCEPT_CODE is null
+ ;
+ select * from ds_omop where DRUG_CODE  = '4673811000001105'
+ ;
+ select * from  ds_all where concept_CODE  = 4673911000001100
+ ;
+ select * from drug_concept_stage where lower (concept_name) = 'triprolidin' 
+ ;
+ select * from ds_all where ingredient_concept_code = 'OMOP11'
+ ;
+ select * from concept where upper (concept_name) like '%DONEPEZIL%10%' and vocabulary_id = 'RxNorm'
+ ;
+ select * from dev_bdpm.relationship_to_concept 
+join concept on concept_id =concept_id_2
+where concept_code_1= '33803'
+;
+select a.concept_name, b.concept_name, drug_strength.*  from drug_strength 
+join concept a on ingredient_concept_id  = a.concept_id
+join concept b  on drug_concept_id = b.concept_id
+where drug_concept_id  = 40223770
+;
+select * from concept where concept_id  = 715997
+; 
+ select distinct * from drug_concept_stage a 
+  join internal_relationship_stage s on a.concept_code = s.concept_code_1
+  join drug_concept_stage b on b.concept_code =s.concept_code_2
+  and b.concept_class_id = 'Dose Form'
+  where a.concept_code in (
+  select a.concept_code from drug_concept_stage a 
+  join internal_relationship_stage s on a.concept_code = s.concept_code_1
+  join drug_concept_stage b on b.concept_code =s.concept_code_2
+  and b.concept_class_id = 'Dose Form'
+  group by a.concept_code having count(1) >1)
+  ;
+    select distinct *
+   from ds_stage a join ds_stage b on a.drug_concept_code = b.drug_concept_code 
+   and (a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null  
+   or a.DENOMINATOR_VALUE != b.DENOMINATOR_VALUE
+   or a.DENOMINATOR_unit != b.DENOMINATOR_unit)
+   ;
+     select distinct DRUG_CONCEPT_CODE
+   from ds_stage a join ds_stage b on a.drug_concept_code = b.drug_concept_code 
+   join drug_concept_stage dd on dd.concept_code = a.drug_concept_code
+   and (a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null  
+   or a.DENOMINATOR_VALUE != b.DENOMINATOR_VALUE
+   or a.DENOMINATOR_unit != b.DENOMINATOR_unit)
+   ;
+   select ds_stage.*, concept_name from ds_stage 
+join drug_concept_stage on drug_concept_code = concept_code 
+where drug_concept_code in (
+   select distinct a.drug_concept_code
+   from ds_stage a join ds_stage b on a.drug_concept_code = b.drug_concept_code 
+   join drug_concept_stage dd on dd.concept_code = a.drug_concept_code
+   and (a.DENOMINATOR_VALUE is null and b.DENOMINATOR_VALUE is not null  
+   or a.DENOMINATOR_VALUE != b.DENOMINATOR_VALUE
+   or a.DENOMINATOR_unit != b.DENOMINATOR_unit)
+   )

@@ -116,7 +116,7 @@ select distinct CONCEPT_CODE,CONCEPT_NAME,CONCEPT_CODE_2,CONCEPT_NAME_2 from DR_
 ;
 --manual update of Packs tables 
 drop sequence new_seq;
- create sequence new_seq increment by 1 start with 100 nocycle cache 20 noorder
+ create sequence new_seq increment by 1 start with 200 nocycle cache 20 noorder
  ;
 drop table PACK_DRUG_TO_CODE_2_2_SEQ;
 create table PACK_DRUG_TO_CODE_2_2_SEQ as (select distinct drug_new_name from PACK_DRUG_TO_CODE_2_2 where drug_code is null);
@@ -129,8 +129,6 @@ set b.drug_code= case when b.drug_code is null then (select a.drug_code from PAC
 update PACK_DRUG_TO_CODE_2_2
 set PACK_NAME=regexp_replace(PACK_NAME,'"')
 --for now remain PACK_DRUG_TO_CODE_2_2 as manual without rebuilding
-;
-SELECT * FROM PACK_DRUG_TO_CODE_2_2
 ;
 --Box to drug - 1 step
 drop table Box_to_Drug ;
@@ -611,6 +609,11 @@ as denominator_unit,
 concept_code, concept_name, DOSAGE, DRUG_COMP, INGREDIENT_CONCEPT_CODE, INGREDIENT_CONCEPT_NAME
 from ds_all_tmp 
 ;
+UPDATE DS_ALL
+   SET INGREDIENT_CONCEPT_CODE = 'OMOP1'
+WHERE CONCEPT_CODE = '4701111000001104'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP11';
+;
 -- update denominator with existing value for concepts having empty and non-emty denominator value/unit
 update ds_all a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )= 
 (select b.DENOMINATOR_VALUE, b.DENOMINATOR_unit  from 
@@ -1065,15 +1068,17 @@ INSERT INTO UNIT_FOR_UCUM(  AMOUNT_UNIT,  CONCEPT_ID_2,  CONCEPT_NAME_2,  CONVER
 INSERT INTO UNIT_FOR_UCUM(  AMOUNT_UNIT,  CONCEPT_ID_2,  CONCEPT_NAME_2,  CONVERSION_FACTOR,  PRECEDENCE,  CONCEPT_ID,  UCUM_CONCEPT_NAME)VALUES(  'nanogram',  8576,  'milligram',  0.000001,  1,  NULL,  NULL);
 INSERT INTO UNIT_FOR_UCUM(  AMOUNT_UNIT,  CONCEPT_ID_2,  CONCEPT_NAME_2,  CONVERSION_FACTOR,  PRECEDENCE,  CONCEPT_ID,  UCUM_CONCEPT_NAME)VALUES(  'nanograms',  8576,  'milligram',  0.000001,  1,  NULL,  NULL);
 INSERT INTO UNIT_FOR_UCUM(  AMOUNT_UNIT,  CONCEPT_ID_2,  CONCEPT_NAME_2,  CONVERSION_FACTOR,  PRECEDENCE,  CONCEPT_ID,  UCUM_CONCEPT_NAME)VALUES(  'mcg',  8576,  'milligram',  0.001,  1,  NULL,  NULL);
-
+*/
+drop table unit_for_ucum_done
+;
 create table unit_for_ucum_done--final table for internal relationship
  as (
 select amount_unit as concept_name_1,amount_unit as concept_Code_1,concept_id_2,concept_name_2,conversion_factor, precedence from unit_for_ucum);
-*/
+
 --units mapping
 insert into RELATIONSHIP_TO_CONCEPT (CONCEPT_CODE_1, VOCABULARY_ID_1 ,   CONCEPT_ID_2  ,PRECEDENCE, CONVERSION_FACTOR) 
 select distinct CONCEPT_CODE_1,'dm+d'  ,CONCEPT_ID_2,PRECEDENCE,CONVERSION_FACTOR from unit_for_ucum_done -- manual table, creation is above
-;
+;select * from unit_for_ucum_done;
 --Brand names mapping
 --name full equality
 drop table  brand_name_map;
@@ -1234,6 +1239,7 @@ set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
   --add newly created ingredients
   insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
  select distinct                  INGR_NAME        ,'Drug', 'dm+d', 'Ingredient', 'S', INGR_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOP  where INGR_CODE !='OMOP18'
+
  ;
 -- select * from drug_concept_stage where concept_code = 'OMOP28663'
 update drug_concept_stage set concept_class_id = 'Drug Product' where concept_class_id like '%Pack%' or concept_class_id like '%Drug%'
@@ -1373,12 +1379,14 @@ and c.concept_class_id = 'Dose Form'
 '21829711000001102'
 )
 */
+
 --change amount to denominator_value
-update  ds_stage ds set amount_value = denominator_value , amount_unit = denominator_unit
+update ds_stage ds set amount_value = denominator_value , amount_unit = denominator_unit, denominator_value = '', denominator_unit = ''
 where exists (select 1 from 
 internal_relationship_stage ir  
 join drug_concept_stage c on c.concept_code = ir.concept_code_2
 join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1
+join (select drug_concept_code from ds_stage group by drug_concept_code having count (1) =1) z on ir.concept_code_1 = z.drug_concept_code
 and c.concept_class_id = 'Dose Form'
  where amount_value is null and numerator_value is null and denominator_value is not null
  and c.concept_code in
@@ -1387,7 +1395,7 @@ and c.concept_class_id = 'Dose Form'
 '385049006',
 '420358004',
 '385043007',
-'7376011000001109',
+
 '385045000',
 '85581007',
 '421079001',
@@ -1397,6 +1405,7 @@ and c.concept_class_id = 'Dose Form'
 '385087003'
 )
 and  ir.concept_code_1 = ds.drug_concept_code )
+AND DENOMINATOR_unit !='g'
 ;
 drop table ds_brand_update;
 create table ds_brand_update as 
@@ -1541,5 +1550,39 @@ and exists (select 1 from drug_concept_stage dcs  where dcs.concept_code  = ds.d
 ;
 commit
 ;
-
+--manual changes ds_stage
+--sum 
+DELETE
+FROM DS_STAGE
+WHERE DRUG_CONCEPT_CODE = '20173311000001101'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP245707'
+AND   NUMERATOR_VALUE = 7;
+DELETE
+FROM DS_STAGE
+WHERE DRUG_CONCEPT_CODE = '20173111000001103'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP245707'
+AND   NUMERATOR_VALUE = 7;
+DELETE
+FROM DS_STAGE
+WHERE DRUG_CONCEPT_CODE = '20345511000001104'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP245707'
+AND   NUMERATOR_VALUE = 7;
+UPDATE DS_STAGE
+   SET NUMERATOR_VALUE = 22.4
+WHERE DRUG_CONCEPT_CODE = '20345511000001104'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP245707'
+AND   NUMERATOR_VALUE = 15.4;
+UPDATE DS_STAGE
+   SET NUMERATOR_VALUE = 22.4
+WHERE DRUG_CONCEPT_CODE = '20173111000001103'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP245707'
+AND   NUMERATOR_VALUE = 15.4;
+UPDATE DS_STAGE
+   SET NUMERATOR_VALUE = 22.4
+WHERE DRUG_CONCEPT_CODE = '20173311000001101'
+AND   INGREDIENT_CONCEPT_CODE = 'OMOP245707'
+AND   NUMERATOR_VALUE = 15.4;
+;
+commit
+;
 
