@@ -1,4 +1,4 @@
-﻿/**************************************************
+/**************************************************
 * This script takes a drug vocabulary q and       *
 * compares it to the existing drug vocabulary r   *
 * The new vocabulary must be provided in the same *
@@ -10,16 +10,16 @@
 * To_do: Add quantification factor                *
 * Suppport writing amount field                   *
 **************************************************/
-
+truncate table concept_relationship_stage;
 -- 1. Create lookup tables for existing vocab r (RxNorm and public country-specific ones)
 -- Create table containing ingredients for each drug
 create table r_drug_ing nologging as
   select de.concept_id as drug_id, an.concept_id as ing_id
   from concept_ancestor a 
   join concept an on a.ancestor_concept_id=an.concept_id and an.concept_class_id='Ingredient' 
-    and an.vocabulary_id in ('RxNorm') -- to be expanded as new vocabs are added
+    and an.vocabulary_id in ('RxNorm', 'RxNorm Extension') -- to be expanded as new vocabs are added
   join concept de on de.concept_id=a.descendant_concept_id  
-    and de.vocabulary_id in ('RxNorm')
+    and de.vocabulary_id in ('RxNorm', 'RxNorm Extension')
 ;
 -- Remove unparsable Albumin products that have no drug_strength entry: Albumin Human, USP 1 NS
 delete from r_drug_ing where drug_id in (19094500, 19080557);
@@ -80,6 +80,7 @@ select distinct
 -- remove the iterations of all the different matches to 0
   case when r_df.concept_id_2 is null then null else q_df.precedence end as df_prec, 
   case when r_bn.concept_id_2 is null then null else q_bn.precedence end as bn_prec,
+  case when r_sp.concept_id_2 is null then null else q_sp.precedence end as sp_prec,
   m.rc_cnt -- get the number of ingredients in the r. It's set to null for ingredients and Clin Drug Comps, and we need that for the next step
 -- get ingredients and their counts to match
 from m m
@@ -105,12 +106,42 @@ left join (
 left join (
   select r.concept_id_1, r.concept_id_2 
   from concept_relationship r
-  join concept on concept_id=r.concept_id_2 and concept_class_id ='Brand Name'
+  join concept on concept_id=r.concept_id_2 and concept_class_id ='Brand Name' ;
   where r.invalid_reason is null 
 ) r_bn on r_bn.concept_id_1=m.r_did and m.rc_cnt is not null -- only take Brand Names if they don't come from Ingredients or Clinical Drug Comps
+
+-- get Supplier for q and r
+left join (
+  select r.concept_code_1, m.concept_id_2, nvl(m.precedence, 1) as precedence
+  from internal_relationship_stage r 
+  join drug_concept_stage on concept_code=r.concept_code_2 and concept_class_id = 'Supplier' 
+  join relationship_to_concept m on m.concept_code_1=r.concept_code_2
+) q_sp on q_sp.concept_code_1=m.q_dcode
+left join (
+  select r.concept_id_1, r.concept_id_2 
+  from concept_relationship r
+  join concept on concept_id=r.concept_id_2 and concept_class_id ='Supplier' 
+  where r.invalid_reason is null 
+) r_sp on r_sp.concept_id_1=m.r_did
+--try the same with Box_size
+left join (
+select drug_concept_code, box_size from ds_stage where box_size is not null) q_bs on q_bs.concept_code_1=m.q_dcode
+left join 
+(
+select drug_concept_id, box_size from drug_strength where box_size is not null) r_bs on r_bs.concept_id_1=m.r_did
+
+left join (
+select drug_concept_code, denominator_value||denominator_unit as quant_f from ds_stage where box_size is not null) q_qnt on q_qnt.concept_code_1=m.q_dcode
+left join 
+(
+select drug_concept_id, denominator_value||denominator_unit as quant_f  from drug_strength where box_size is not null) r_qnt on r_qnt.concept_id_1=m.r_did
+
 -- remove comments if mapping should be done both upwards (standard) and downwards (to find a possible unique low-granularity solution)
-where coalesce(q_bn.concept_id_2, /* q_bn.concept_id_2, */0)=coalesce(r_bn.concept_id_2, q_bn.concept_id_2, 0) -- Allow matching of the same Brand Name or no Brand Name, but not another Brand Name
-and coalesce(q_df.concept_id_2, /*q_df.concept_id_2, */0)=coalesce(r_df.concept_id_2, q_df.concept_id_2, 0) -- Allow matching of the same Dose Form or no Dose Form, but not another Dose Form�
+where coalesce(q_bn.concept_id_2, /* r_bn.concept_id_2, */0)=coalesce(r_bn.concept_id_2, q_bn.concept_id_2, 0) -- Allow matching of the same Brand Name or no Brand Name, but not another Brand Name
+and coalesce(q_df.concept_id_2, /*r_df.concept_id_2, */0)=coalesce(r_df.concept_id_2, q_df.concept_id_2, 0) -- Allow matching of the same Dose Form or no Dose Form, but not another Dose Form?
+and coalesce(q_sp.concept_id_2, /*r_sp.concept_id_2, */0)=coalesce(r_sp.concept_id_2, q_sp.concept_id_2, 0) 
+
+
 ;
 
 -- Add matching of dose and its units
@@ -121,7 +152,7 @@ with q as (
     q_ds.amount_value*q_ds_a.conversion_factor as amount_value, q_ds_a.concept_id_2 as amount_unit_concept_id, 
     q_ds.numerator_value*q_ds_n.conversion_factor as numerator_value, q_ds_n.concept_id_2 as numerator_unit_concept_id,
     nvl(q_ds.denominator_value, 1)*nvl(q_ds_d.conversion_factor, 1) as denominator_value, q_ds_d.concept_id_2 as denominator_unit_concept_id,
-    coalesce(q_ds_a.precedence, q_ds_n.precedence, q_ds_d.precedence) as u_prec
+    coalesce(q_ds_a.precedence, q_ds_n.precedence, q_ds_d.precedence) as u_prec/*, box_size*/
   from ds_stage q_ds
   left join relationship_to_concept q_ds_a on q_ds_a.concept_code_1=q_ds.amount_unit -- amount units
   left join relationship_to_concept q_ds_n on q_ds_n.concept_code_1=q_ds.numerator_unit -- numerator units
@@ -132,7 +163,7 @@ with q as (
     r_ds.amount_value, r_ds.amount_unit_concept_id,
     r_ds.numerator_value, r_ds.numerator_unit_concept_id,
     nvl(r_ds.denominator_value, 1) as denominator_value, -- Quantified have a value in the denominator, the others haven't.
-    r_ds.denominator_unit_concept_id
+    r_ds.denominator_unit_concept_id/*, box_size*/ --once we get RxNorm Extension this value will be exist
   from drug_strength r_ds 
 )
 -- Create variables div as r amount / q amount, and unit as 1 for matching and 0 as non-matching 
@@ -202,7 +233,7 @@ having not exists (
   select 1 
   from q_to_r_wdose m -- join the set of the same 
   where a.q_dcode=m.q_dcode and a.r_did=m.r_did
-  and a.bn_prec=m.bn_prec and a.df_prec=m.df_prec and a.u_prec=m.u_prec
+  and a.bn_prec=m.bn_prec and a.df_prec=m.df_prec and a.u_prec=m.u_prec 
 -- Change the factor closer to 1 if matching should be tighter. Currently, anything within 10% amount will be considered a match.
   and (m.div<0.9 or m.u_match=0)
 )
@@ -241,10 +272,10 @@ from (
         'Quant Branded Box', 1,
         'Quant Clinical Box', 2,
         'Branded Drug Box', 3,
-        'Clinical Drug Box', 4,
-        'Quant Clinical Drug', 5,
-        'Quant Branded Drug', 6,
-        'Branded Drug', 7,
+        'Clinical Drug Box', 4,   
+        'Quant Branded Drug', 5,
+        'Quant Clinical Drug', 6,
+          'Branded Drug', 7,
         'Clinical Drug', 8,
         'Branded Drug Form', 9,
         'Clinical Drug Form', 10,
@@ -305,10 +336,11 @@ commit;
 * Clean up
 *****************************/
 
-drop table drug_concept_stage purge;
-drop table relationship_to_concept purge;
-drop table internal_relationship_stage purge;
-drop table ds_stage purge;
+--drop table drug_concept_stage purge;
+--drop table relationship_to_concept purge;
+--drop table internal_relationship_stage purge;
+--drop table ds_stage purge;
+/*
 drop table r_drug_ing purge;
 drop table r_ing_count purge;
 drop table q_drug_ing purge;
@@ -319,3 +351,4 @@ drop table q_to_r_anydose purge;
 drop table q_to_r_wdose purge;
 drop table q_to_r purge;
 drop table best_map purge;
+*/
