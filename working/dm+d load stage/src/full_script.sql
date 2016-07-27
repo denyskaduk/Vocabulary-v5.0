@@ -1585,4 +1585,9 @@ AND   NUMERATOR_VALUE = 15.4;
 ;
 commit
 ;
+ update internal_relationship_stage a
+ set concept_code_2 = (select concept_code_2 from internal_relationship_stage b where a.concept_code_2 = b.concept_code_1)
+ where exists (Select 1 from drug_concept_stage z where z.concept_code = a.concept_code_2 and z.invalid_reason is not null)
+ and exists (Select 1 from drug_concept_stage x where x.concept_code = a.concept_code_1 and x.invalid_reason is null)
+ and exists (select 1 from internal_relationship_stage b where a.concept_code_2 = b.concept_code_1) 
 

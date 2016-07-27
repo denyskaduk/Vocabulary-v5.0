@@ -1019,3 +1019,34 @@ where drug_concept_code in (
    or a.DENOMINATOR_VALUE != b.DENOMINATOR_VALUE
    or a.DENOMINATOR_unit != b.DENOMINATOR_unit)
    )
+;
+select * from  ds_stage ds
+join drug_concept_stage on drug_concept_code = concept_code
+-- set amount_value = denominator_value , amount_unit = denominator_unit, denominator_value = '', denominator_unit = ''
+where exists (select 1 from 
+internal_relationship_stage ir  
+join drug_concept_stage c on c.concept_code = ir.concept_code_2
+join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1 and c.concept_class_id = 'Dose Form'
+join (select drug_concept_code from ds_stage group by drug_concept_code having count (1) =1) z on ir.concept_code_1 = z.drug_concept_code
+
+ where amount_value is null and numerator_value is null and denominator_value is not null
+ and c.concept_code in
+ ( --all solid forms
+ '3095811000001106',
+'385049006',
+'420358004',
+'385043007',
+'385045000',
+'85581007',
+'421079001',
+'385042002',
+'385054002',
+'385052003',
+'385087003'
+)
+and  ir.concept_code_1 = ds.drug_concept_code)
+;
+SELECT * FROM internal_relationship_stage ir  
+join drug_concept_stage c on c.concept_code = ir.concept_code_2
+join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1 and c.concept_class_id = 'Dose Form'
+WHERE C1.CONCEPT_CODE = '28048111000001100'

@@ -78,13 +78,13 @@
   ) and  domain_id = 'Drug'
   union
   --Drug to Ingredient
-  select distinct concept_code,'Missing relationship to Ingredient'  from drug_concept_stage where concept_class_id like '%Drug%' and concept_code not in(
+  select distinct concept_code , 'Missing relationship to Ingredient'  from drug_concept_stage where concept_class_id like '%Drug%' and concept_code not in(
   select a.concept_code from  drug_concept_stage a 
   join internal_relationship_stage s on s.concept_code_1= a.concept_code  
   join drug_concept_stage b on b.concept_code = s.concept_code_2
    and  a.concept_class_id like '%Drug%' and b.concept_class_id ='Ingredient'
   ) and concept_class_id not like '%Pack%'
-  and domain_id = 'Drug'
+  and domain_id = 'Drug' and concept_code not in (select pack_concept_code from pack_content) and invalid_reason is null
 
   union
   --Drug (non Component) to Form
@@ -92,9 +92,9 @@
   select a.concept_code from  drug_concept_stage a 
   join internal_relationship_stage s on s.concept_code_1= a.concept_code  
   join drug_concept_stage b on b.concept_code = s.concept_code_2
-   and  a.concept_class_id like '%Drug%' and a.concept_class_id not like '%Comp%' and b.concept_class_id ='Dose Form'
+   and  a.concept_class_id like '%Drug%' and a.concept_class_id not like '%Comp%' and b.concept_class_id ='Dose Form' 
   )
-  and domain_id = 'Drug'
+  and domain_id = 'Drug' and concept_class_id not like '%Pack%' and concept_code not in (select pack_concept_code from pack_content) and invalid_reason is null 
   union
   --several brand names
   select distinct a.concept_code,'Drug has more than one brand names' from drug_concept_stage a 
@@ -207,9 +207,65 @@
   select concept_code  from drug_concept_stage
   where  valid_end_date <=SYSDATE or valid_end_date = to_date ('2099-12-31', 'YYYY-MM-DD') )
   union
-  --Improper valid_start_date
+  --'MIN precedence >1'
+  select concept_code_1, 'MIN precedence >1' from (
+  select concept_code_1, min (precedence) as precedence from relationship_to_concept group by concept_code_1) where precedence >1
+  union
+  --'relationsip to deprecated cncpt'
+  select distinct c1.concept_code, 'relationsip to deprecated cncpt' from drug_concept_stage c1
+  join internal_relationship_stage ir on ir.concept_code_1 = c1.concept_code and c1.invalid_reason is null
+  join drug_concept_stage c2 on ir.concept_code_2 = c2.concept_code and c2.invalid_reason is not null
+  union
+--Improper valid_start_date
   select concept_code, 'Improper valid_start_date' from drug_concept_stage where valid_start_date >  SYSDATE
+  union
+  -- dead target concepts
+  select distinct concept_code_1, 'dead target concepts' from relationship_to_concept join concept on concept_id = concept_id_2 and invalid_reason is not null/* and vocabulary_id !='ATC'*/
+union
+--Non-standard target Ingredient concept
+  select distinct concept_code_1, 'Non-standard target Ingredient concept' from relationship_to_concept join concept on concept_id = concept_id_2 and invalid_reason is null and concept_class_id ='Ingredient'
+  /* and vocabulary_id !='ATC'*/
+where standard_concept is null
+
   ) a join drug_concept_stage b on a.concept_code = b.concept_code where b.invalid_reason is null and b.domain_id = 'Drug'  
    group by error_type
+;
+create index idx_irs_code_1 on  internal_relationship_stage (concept_code_1 ASC);
+create index idx_irs_code_2 on  internal_relationship_stage (concept_code_2 ASC);
 
+create index idx_dds_code_1 on  ds_stage (drug_concept_code ASC);
+create index idx_dss_code_2 on  ds_stage (ingredient_concept_code ASC);
 
+create index  idx_dcs_code on  Drug_concept_stage (concept_code ASC);
+
+commit
+;
+/*
+create table comb_check_tmp as 
+select distinct d.concept_code, 
+  case when ds.concept_code is null then 0 else 1 end as supplier,
+  case when ddf.concept_code is null then 0 else 1 end as Dose_Form,
+   case when dbn.concept_code is null then 0 else 1 end as Brand_Name,
+     case when din.concept_code is null then 0 else 1 end as Ingredient,
+     case when dsq.drug_concept_code is null then 0 else 1 end as Quantity_factor,
+     case when dsq.drug_concept_code is null then 0 else 1 end as Drug_strength,
+     case when dsb.drug_concept_code is null then 0 else 1 end as Box_size
+from drug_concept_stage d
+left join internal_relationship_stage isp on isp.concept_code_1=d.concept_code
+left join drug_concept_stage ds on ds.concept_code=isp.concept_code_2 and ds.concept_class_id = 'Supplier'
+left join internal_relationship_stage idf on idf.concept_code_1=d.concept_code
+left join drug_concept_stage ddf on ddf.concept_code=idf.concept_code_2 and ddf.concept_class_id = 'Form'
+left join internal_relationship_stage ibn on ibn.concept_code_1=d.concept_code
+left join drug_concept_stage dbn on dbn.concept_code=ibn.concept_code_2 and dbn.concept_class_id = 'Brand Name'
+left join internal_relationship_stage iin on iin.concept_code_1=d.concept_code
+left join drug_concept_stage din on din.concept_code=iin.concept_code_2 and din.concept_class_id in ('Ingredient','VTM')
+left join ds_stage dsq on dsq.drug_concept_code=d.concept_code and dsq.denominator_value is not null
+left join ds_stage dsb on dsb.drug_concept_code=d.concept_code and dsq.box_size is not null
+left join ds_stage dsd on dsd.drug_concept_code=d.concept_code and ( dsd.denominator_value is not null or dsd.amount_value is not null)
+where d.concept_class_id in ('AMP', 'AMPP', 'VMP', 'VMPP') and d.domain_id='Drug' and d.invalid_reason is null
+; 
+create table comb_check as 
+ select ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier, count(*) from comb_check_tmp 
+  group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier
+  ;
+  */
