@@ -366,9 +366,8 @@ select * from CLIN_DR_TO_DOSE_form_3
 --remove 'Not applicable' forms
 delete from DR_TO_DOSE_form_full where concept_code_2 = '3097611000001100'
 ;
---???
 --Manufacturer
---just take it from names long executing part, don't rerun next time
+--just take it from names , it's long executing part, don't rerun 
 /*
 drop table Drug_to_manufact_2 ;
   create table Drug_to_manufact_2 as
@@ -936,7 +935,7 @@ drug_concept_stage b where lower (a.BRAND_NAME) = lower (b.concept_name)
   delete  from branded_drug_to_brand_name a where exists (select 1 from
 non_drug_full b where b.concept_code = a.concept_code)
 ;
-
+--manual BRAND_NAME work, finding proper patterns
 delete  branded_drug_to_brand_name where BRAND_NAME in 
 ('Zinc compound paste'	,'Yellow soft paraffin solid'	,'Wild cherry syrup','Pneumococcal polysaccharide vaccine','Hibicet hospital concentrate'	,'Crystal violet powder BP','White soft paraffin solid','Thuja occidentalis','White liniment'	,'Vitamins A and D capsules BPC'	,'Vitamins'	,'Vitamin K2'	,'Vitamin E'	,'Vitamin D3'	,
 'Vitamin C','Tri-iodothyronine'	,'Trichloroacetic acid and Salicylic acid paste','Phosphates enema'	,'Tea Tree and Witch Hazel'	,'Surgical spirit'	,'Starch maize','St. James Balm','Squill opiate linctus paediatric'	,
@@ -965,9 +964,7 @@ set brand_name=regexp_replace(brand_name,'/eye(\s)?(.*)?|with (.*) mask|emulsion
 update  branded_drug_to_brand_name
 set brand_name=regexp_replace(brand_name,'(\s)+$');
 update  branded_drug_to_brand_name
-set brand_name=regexp_replace(brand_name,'  ',' ');
---add sequence
-
+set brand_name=regexp_replace(brand_name,'  ',' ')
  ;
  drop table br_name_list;
 create table br_name_list as 
@@ -1154,7 +1151,6 @@ FROM RELATIONSHIP_TO_CONCEPT
 WHERE CONCEPT_CODE_1 = '385197005'
 AND   CONCEPT_ID_2 = 19126918
 AND   PRECEDENCE IS NULL;
-
 --ATC concepts 
 drop table clinical_to_atc ;
 create table clinical_to_atc as 
@@ -1510,8 +1506,9 @@ where c1.concept_class_id='Drug Product' and c2.concept_class_id='Drug Product'
 and c1.invalid_reason= 'D' and c1.concept_code = c.concept_code);
 
   delete from relationship_to_concept where concept_id_2 = 19135832
-    ;
+;
     commit
-    ;
+;
   --remove comments if you want to delete improper ds_stage entries 
   /*delete from ds_stage where numerator_value is null and amount_value is null; commit;*/
+  

@@ -264,13 +264,14 @@ select ri.*, ci.concept_class_id as concept_class_id_1 , c2.concept_class_id as 
 from devv5.concept_relationSHIp ri 
 join devv5.concept ci on ci.concept_id = ri.concept_id_1 
 join devv5.concept c2 on c2.concept_id = ri.concept_id_2 
-where ci.vocabulary_id = 'RxNorm' and ri.invalid_reason is null and ci.invalid_reason is null 
-and  c2.vocabulary_id = 'RxNorm'  and ci.invalid_reason is null 
+where ci.vocabulary_id like  'RxNorm%' and ri.invalid_reason is null and ci.invalid_reason is null 
+and  c2.vocabulary_id like 'RxNorm%'  and ci.invalid_reason is null 
 ;
 --define order as combination of attributes number and each attribute weight
 DROP table attrib_cnt;
 create table attrib_cnt as
 select concept_id_1, count (1)|| max(weight) as weight  from (
+--need to go throught Drug Form / Component to get the Brand Name
 select distinct a.concept_id_1, 3 as weight from 
 cnc_rel_class a join cnc_rel_class b on a.concept_id_2 = b.concept_id_1 
 where b.concept_class_id_2 in ('Brand Name')
@@ -344,3 +345,5 @@ drop table q_to_r purge;
 drop table cnc_rel_class purge;
 drop table attrib_cnt purge;
 drop table best_map purge;
+
+ select * from dev_rxnorm.replaced_atc
