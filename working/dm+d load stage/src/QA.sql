@@ -137,10 +137,6 @@
   --concept_name is null
   select concept_code,'concept_name is null' from drug_concept_stage where concept_name is null
   union
-  --same concept_code_1 - concept_id_2 relationship but different precedence
-  select distinct a.concept_code_1, 'same concept_code_1 - concept_id_2 relationship but different precedence' from relationship_to_concept a 
-  join relationship_to_concept b on a.CONCEPT_CODE_1 =b.CONCEPT_CODE_1 and a.CONCEPT_ID_2 = b.concept_id_2 and a.precedence !=b.precedence
-  union
   --Brand Name doesnt relate to any drug
   select distinct a.concept_code, 'Brand Name doesnt relate to any drug' from drug_concept_stage a left join  internal_relationship_stage b on a.concept_code = b.concept_code_2
   where a.concept_class_id= 'Brand Name' and b.concept_code_1 is null
@@ -165,7 +161,7 @@
   select  concept_code_1,precedence from relationship_to_concept group by concept_code_1,precedence having count (1) >1 )
   union
   ----Concept_code_1 - Ingredient duplicates
-  select concept_code_1, 'Concept_code_1 - precedence duplicates' from (
+  select concept_code_1, 'Concept_code_1 - Ingredient duplicates' from (
   select  concept_code_1,concept_id_2 from relationship_to_concept group by concept_code_1,concept_id_2 having count (1) >1 )
   union
   --Unit without mapping
@@ -220,16 +216,29 @@
   select concept_code, 'Improper valid_start_date' from drug_concept_stage where valid_start_date >  SYSDATE
   union
   -- dead target concepts
-  select distinct concept_code_1, 'dead target concepts' from relationship_to_concept join concept on concept_id = concept_id_2 and invalid_reason is not null/* and vocabulary_id !='ATC'*/
+  select distinct concept_code_1, 'dead target concepts' from relationship_to_concept join concept on concept_id = concept_id_2 and invalid_reason is not null and vocabulary_id !='ATC'
 union
 --Non-standard target Ingredient concept
-  select distinct concept_code_1, 'Non-standard target Ingredient concept' from relationship_to_concept join concept on concept_id = concept_id_2 and invalid_reason is null and concept_class_id ='Ingredient'
-  /* and vocabulary_id !='ATC'*/
+  select distinct concept_code_1, 'Non-standard target Ingredient concept' from relationship_to_concept join concept on concept_id = concept_id_2 and invalid_reason is null and concept_class_id ='Ingredient'   /* and vocabulary_id !='ATC'*/
 where standard_concept is null
+union
+--Domain = Device, concept_class = Drug
+select distinct concept_code, 'Domain = Device, concept_class = Drug' from   drug_concept_stage where domain_id='Device' and concept_class_id like '%Drug%'
+union
+select distinct concept_code, 'Domain = Drug, concept_class = Device' from   drug_concept_stage where domain_id='Drug' and concept_class_id ='Device'
+union 
+--Deprecated concepts have upgrades, should be U
+ select c1.concept_code, 'Deprecated concepts have upgrades, should be U'
+from drug_concept_stage c1
+join internal_relationship_stage r on r.concept_code_1=c1.concept_code 
+join drug_concept_stage c2 on c2.concept_code=r.concept_code_2
+where c1.concept_class_id='Drug Product' and c2.concept_class_id='Drug Product'
+and c1.invalid_reason= 'D'
 
   ) a join drug_concept_stage b on a.concept_code = b.concept_code where b.invalid_reason is null and b.domain_id = 'Drug'  
    group by error_type
 ;
+/*
 create index idx_irs_code_1 on  internal_relationship_stage (concept_code_1 ASC);
 create index idx_irs_code_2 on  internal_relationship_stage (concept_code_2 ASC);
 
@@ -240,7 +249,7 @@ create index  idx_dcs_code on  Drug_concept_stage (concept_code ASC);
 
 commit
 ;
-/*
+
 create table comb_check_tmp as 
 select distinct d.concept_code, 
   case when ds.concept_code is null then 0 else 1 end as supplier,

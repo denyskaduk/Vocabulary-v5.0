@@ -311,13 +311,15 @@ INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_COD
 INSERT INTO CLIN_DR_TO_DOSE_FORM(  CONCEPT_CODE_1,  CONCEPT_NAME_1,  CONCEPT_CODE,  CONCEPT_NAME)VALUES(  'OMOP100',  'Rebif 22micrograms/0.25ml (6million units) solution for injection 1.5ml cartridges (Merck Serono Ltd)',  '385219001',  'Solution for injection');
 ;   
 --define non-drugs, clinical part of 
-drop table clnical_non_drug;
+drop table clnical_non_drug; 
 create table clnical_non_drug as
 select * from drug_concept_stage where (concept_code not in (select concept_code_1 from clin_dr_to_dose_form where concept_code_1 is not null)  and invalid_reason is  null
 or regexp_like (concept_name, 'peritoneal dialysis|dressing|burger|needl|soap|biscuits|wipes|cake|milk|dessert|juice|bath oil|gluten|Low protein|cannula|swabs|bandage|Artificial saliva|cylinder|Bq', 'i')
 or DOMAIN_ID ='Device'
 ) and concept_class_id = 'Clinical Drug'
 ;
+--TISSEEL was considered as Device in the source data, while it has Fibrin as a component we define it as drug product
+DELETE from clnical_non_drug where concept_name like '%TISSEEL%';
 --ADD MANUALLY DEFINED NON DRUG CONCEPTS
 insert into clnical_non_drug (CONCEPT_ID,CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON,INSERT_ID, SOURCE_CONCEPT_CLASS_ID)
 select distinct  a.* from drug_concept_stage a 
@@ -523,7 +525,8 @@ select DOSAGE, '',CONCEPT_NAME, cast (CONCEPT_CODE as varchar (250)), CONCEPT_CO
   where CONCEPT_CODE_2 is not null
 union 
 -- lost ingredients
-select '','',drug_name, DRUG_CODE, INGR_CODE,INGR_NAME, ''  from  lost_ingr_to_rx_with_OMOP --!!!
+select '','',drug_name, DRUG_CODE, INGR_CODE,INGR_NAME, ''  from  lost_ingr_to_rx_with_OMOP --!!! 
+
 ;
 --need to redefine 
 DELETE
@@ -1190,15 +1193,11 @@ drug_concept_stage_existing
 ;
 update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_code in (select concept_code from non_drug_full)
 ;
---update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_name like '%Bq%'
-;
 update drug_concept_stage set domain_id = 'Device', concept_class_id = 'Device' where concept_code in ('3378311000001103','3378411000001105')
 ;
 delete from ds_stage where exists (select 1 from drug_concept_stage where drug_concept_code = concept_code and domain_id = 'Device')
 ;
---delete from ds_stage where exists (select 1 from drug_concept_stage where drug_concept_code = concept_code and domain_id = 'Device')
-;
-update drug_concept_stage set domain_id = 'Drug' where concept_code not in (select concept_code from non_drug_full)
+update drug_concept_stage set domain_id = 'Drug' where domain_id != 'Device'
 ;
 --newly generated concepts 
 --Brand Names
@@ -1241,7 +1240,7 @@ set concept_class_id = 'Supplier' where concept_class_id = 'Manufacturer'
  select distinct                  INGR_NAME        ,'Drug', 'dm+d', 'Ingredient', 'S', INGR_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'Ingredient' from lost_ingr_to_rx_with_OMOP  where INGR_CODE !='OMOP18'
 
  ;
--- select * from drug_concept_stage where concept_code = 'OMOP28663'
+ 
 update drug_concept_stage set concept_class_id = 'Drug Product' where concept_class_id like '%Pack%' or concept_class_id like '%Drug%'
 ;
 commit;
@@ -1259,10 +1258,8 @@ and box_size is  null
 ;
 commit;
 --delete impossible combinations from ds_stage, treat these drugs as Clinical/Branded Drug Form
---for now we make an analysis
-/*
-delete from ds_stage where numerator_value is null and amount_value is null
-*/
+delete from ds_stage a
+where numerator_UNIT is null and numerator_value is not null
 ;
 update ds_stage a
 set AMOUNT_UNIT = null, AMOUNT_VALUE = null, NUMERATOR_VALUE = AMOUNT_VALUE, NUMERATOR_UNIT = AMOUNT_UNIT
@@ -1277,13 +1274,6 @@ UPDATE DS_STAGE
 WHERE DRUG_CONCEPT_CODE = '14779411000001100'
 AND   INGREDIENT_CONCEPT_CODE = '80582002';
 
---delete impossible combinations from ds_stage, treat these drugs as Clinical/Branded Drug Form
---!!! keep this for further analysis
-/*
-delete from ds_stage a
-where numerator_UNIT is null and numerator_value is not null
-*/
- ;
 select count (distinct drug_concept_code) from (
 select drug_concept_code from ds_stage a
 where amount_value is null and numerator_value is null and DENOMINATOR_VALUE is not null
@@ -1298,89 +1288,9 @@ where amount_value is null and numerator_value is null
 and c.concept_class_id = 'Supplier'
 )
 ;
-/*
-select distinct b.concept_name from ds_stage a
-join drug_concept_stage b on a.drug_concept_code = b.concept_code
-where  amount_value is null and numerator_value is null
-*/
-;
 commit
 ;
-/* don't need this anymore
-alter table drug_concept_Stage 
-add  source_concept_class_id varchar (20)
-; 
---set concept_classes to values given originaly by dm+d source
-update drug_concept_stage 
-set source_concept_class_id = 'Form' where insert_id in (3,4)
-;
-update drug_concept_stage  set source_concept_class_id = 'Ingredient' where insert_id in (7,8)
-;
-update drug_concept_stage  set source_concept_class_id = 'VTM' where insert_id in (9,10)
-;
-update drug_concept_stage  set source_concept_class_id = 'VMP' where insert_id in (11,12)
-;
-update drug_concept_stage  set source_concept_class_id = 'AMP' where insert_id in (13)
-;
-update drug_concept_stage  set source_concept_class_id = 'VMPP' where insert_id in (14)
-;
-update drug_concept_stage  set source_concept_class_id = 'AMPP' where insert_id in (15)
-;
-update drug_concept_stage  set source_concept_class_id = 'Supplier' where insert_id in (16)
-;
-*/
---investigation
-/*
---update ds_stage, some dose forms can't have denominator but should have amount
-select distinct c.concept_code, c.concept_name from ds_stage ds
-join internal_relationship_stage ir on ir.concept_code_1 = ds.drug_concept_code 
-join drug_concept_stage c on c.concept_code = ir.concept_code_2
-and c.concept_class_id = 'Dose Form'
- where amount_value is null and numerator_value is null and denominator_value is not null
- ;
- select *
- -- distinct c.concept_code, c.concept_name 
- from ds_stage ds
-join internal_relationship_stage ir on ir.concept_code_1 = ds.drug_concept_code 
-join drug_concept_stage c on c.concept_code = ir.concept_code_2
-join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1
-and c.concept_class_id = 'Dose Form'
- where amount_value is null and numerator_value is null and denominator_value is not null
- and c.concept_code in
- ( --all solid forms
- '3095811000001106',
-'385049006',
-'420358004',
-'385043007',
-'7376011000001109',
-'385045000',
-'85581007',
-'421079001',
-'385042002',
-'385054002',
-'385052003',
-'385087003'
-)
-
-;
- select *
- -- distinct c.concept_code, c.concept_name 
- from ds_stage ds
-join internal_relationship_stage ir on ir.concept_code_1 = ds.drug_concept_code 
-join drug_concept_stage c on c.concept_code = ir.concept_code_2
-join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1
-and c.concept_class_id = 'Dose Form'
- where amount_value is null and numerator_value is null and denominator_value is not null
- and c.concept_code in
- (
-'14945811000001105',
-'7375911000001101',
-'17036711000001108',
-'21829711000001102'
-)
-*/
-
---change amount to denominator_value
+--change amount to denominator_value when there is a solid form
 update ds_stage ds set amount_value = denominator_value , amount_unit = denominator_unit, denominator_value = '', denominator_unit = ''
 where exists (select 1 from 
 internal_relationship_stage ir  
@@ -1395,7 +1305,6 @@ and c.concept_class_id = 'Dose Form'
 '385049006',
 '420358004',
 '385043007',
-
 '385045000',
 '85581007',
 '421079001',
@@ -1428,9 +1337,10 @@ select * from ds_stage where drug_concept_code  in ('16636811000001107', '166369
 ;
 commit
 ;
+-- change to procedure
 drop sequence new_vocab;
  create sequence new_vocab increment by 1 start with 245693 nocycle cache 20 noorder
- ; -- change to procedure
+ ; 
 drop table code_replace;
  create table code_replace as 
  select 'OMOP'||new_vocab.nextval as new_code, concept_code as old_code from (
@@ -1585,9 +1495,23 @@ AND   NUMERATOR_VALUE = 15.4;
 ;
 commit
 ;
+--set proper forms instead of upgrated
  update internal_relationship_stage a
  set concept_code_2 = (select concept_code_2 from internal_relationship_stage b where a.concept_code_2 = b.concept_code_1)
  where exists (Select 1 from drug_concept_stage z where z.concept_code = a.concept_code_2 and z.invalid_reason is not null)
  and exists (Select 1 from drug_concept_stage x where x.concept_code = a.concept_code_1 and x.invalid_reason is null)
  and exists (select 1 from internal_relationship_stage b where a.concept_code_2 = b.concept_code_1) 
+;
+--set invalid_reason = 'U' when we have upgrated concept
+update drug_concept_stage c set c.invalid_reason= 'U' where exists (select 1  from drug_concept_stage c1
+join internal_relationship_stage r on r.concept_code_1=c1.concept_code 
+join drug_concept_stage c2 on c2.concept_code=r.concept_code_2
+where c1.concept_class_id='Drug Product' and c2.concept_class_id='Drug Product'
+and c1.invalid_reason= 'D' and c1.concept_code = c.concept_code);
 
+  delete from relationship_to_concept where concept_id_2 = 19135832
+    ;
+    commit
+    ;
+  --remove comments if you want to delete improper ds_stage entries 
+  /*delete from ds_stage where numerator_value is null and amount_value is null; commit;*/

@@ -13,6 +13,7 @@
 truncate table concept_relationship_stage;
 -- 1. Create lookup tables for existing vocab r (RxNorm and public country-specific ones)
 -- Create table containing ingredients for each drug
+--drop table r_drug_ing nologging;
 create table r_drug_ing nologging as
   select de.concept_id as drug_id, an.concept_id as ing_id
   from concept_ancestor a 
@@ -24,15 +25,18 @@ create table r_drug_ing nologging as
 -- Remove unparsable Albumin products that have no drug_strength entry: Albumin Human, USP 1 NS
 delete from r_drug_ing where drug_id in (19094500, 19080557);
 -- Count number of ingredients for each drug
+--drop table r_ing_count;
 create table r_ing_count nologging as
   select drug_id as did, count(*) as cnt from r_drug_ing group by drug_id
 ;
 -- Set all counts for Ingredient and Clinical Drug Comp to null, so in comparisons it can match whatever number necessary. Reason is that, like ingredients, Clinical Drug Comp is always only one ingredient
 update r_ing_count set cnt=null where did in (select concept_id from concept where concept_class_id in ('Clinical Drug Comp', 'Ingredient'));
 
+--drop index x_r_drug_ing;
 create index x_r_drug_ing on r_drug_ing(drug_id, ing_id) nologging;
 
 -- Create lookup table for query vocab q (new vocab)
+--drop table  q_drug_ing;
 create table q_drug_ing nologging as
 select drug.concept_code as drug_code, nvl(ing.concept_id, 0) as ing_id, i.concept_code as ing_code -- if ingredient is not mapped use 0 to still get the right ingredient count
 from drug_concept_stage i
@@ -65,6 +69,7 @@ select r_did, q_dcode, count(*) as cnt from match group by r_did, q_dcode
 update shared_ing set cnt=null where r_did in (select concept_id from concept where concept_class_id in ('Clinical Drug Comp', 'Ingredient'));
 
 -- Create table that matches drugs q to r, based on Ingredient, Dose Form and Brand Name (if exist). Dose, box size or quantity are not yet compared
+--drop table q_to_r_anydose; 
 create table q_to_r_anydose nologging as
 -- create table with all query drug codes q_dcode mapped to standard drug concept ids r_did, irrespective of the correct dose
 with m as (
@@ -106,7 +111,7 @@ left join (
 left join (
   select r.concept_id_1, r.concept_id_2 
   from concept_relationship r
-  join concept on concept_id=r.concept_id_2 and concept_class_id ='Brand Name' ;
+  join concept on concept_id=r.concept_id_2 and concept_class_id ='Brand Name'
   where r.invalid_reason is null 
 ) r_bn on r_bn.concept_id_1=m.r_did and m.rc_cnt is not null -- only take Brand Names if they don't come from Ingredients or Clinical Drug Comps
 
@@ -124,27 +129,30 @@ left join (
   where r.invalid_reason is null 
 ) r_sp on r_sp.concept_id_1=m.r_did
 --try the same with Box_size
+/*
 left join (
 select drug_concept_code, box_size from ds_stage where box_size is not null) q_bs on q_bs.concept_code_1=m.q_dcode
 left join 
 (
 select drug_concept_id, box_size from drug_strength where box_size is not null) r_bs on r_bs.concept_id_1=m.r_did
-
+*/
 left join (
-select drug_concept_code, denominator_value||denominator_unit as quant_f from ds_stage where box_size is not null) q_qnt on q_qnt.concept_code_1=m.q_dcode
+select drug_concept_code, denominator_value*conversion_factor ||' '||concept_id_2  as quant_f from ds_stage ds
+join relationship_to_concept rc on denominator_unit = rc.concept_code_1 and precedence =1 
+ where denominator_value is not null) q_qnt on q_qnt.drug_concept_code=m.q_dcode
 left join 
 (
-select drug_concept_id, denominator_value||denominator_unit as quant_f  from drug_strength where box_size is not null) r_qnt on r_qnt.concept_id_1=m.r_did
+select drug_concept_id,  denominator_value ||' '|| denominator_unit_concept_id  as quant_f  from drug_strength where denominator_value is not null) r_qnt on r_qnt.drug_concept_id=m.r_did
 
 -- remove comments if mapping should be done both upwards (standard) and downwards (to find a possible unique low-granularity solution)
 where coalesce(q_bn.concept_id_2, /* r_bn.concept_id_2, */0)=coalesce(r_bn.concept_id_2, q_bn.concept_id_2, 0) -- Allow matching of the same Brand Name or no Brand Name, but not another Brand Name
 and coalesce(q_df.concept_id_2, /*r_df.concept_id_2, */0)=coalesce(r_df.concept_id_2, q_df.concept_id_2, 0) -- Allow matching of the same Dose Form or no Dose Form, but not another Dose Form?
-and coalesce(q_sp.concept_id_2, /*r_sp.concept_id_2, */0)=coalesce(r_sp.concept_id_2, q_sp.concept_id_2, 0) 
-
-
+and coalesce(q_sp.concept_id_2, /*r_df.concept_id_2, */0)=coalesce(r_sp.concept_id_2, q_sp.concept_id_2, 0) -- Allow matching of the same Supplier or no Supplier, but not another Supplier
+--and coalesce(q_bs.box_size, /*q_bs.box_size, */0)=coalesce(r_sp.box_sizw, q_sp.box_size, 0) 
+and coalesce(q_qnt.quant_f, /*r_sp.concept_id_2, */'X')=coalesce(r_qnt.quant_f, q_qnt.quant_f, 'X') 
 ;
-
 -- Add matching of dose and its units
+--drop table q_to_r_wdose ;
 create table q_to_r_wdose nologging as
 -- Create two temp tables with all strength and unit information
 with q as (
@@ -213,6 +221,7 @@ commit;
 
 -- Remove all those where not everything fits
 -- The table has to be created separately because both subsequent queries define one field as null
+--drop table q_to_r ;
 create table q_to_r nologging as
 select q_dcode, r_did, r_iid, bn_prec, df_prec, u_prec, rc_cnt from q_to_r_wdose
 where 1=0;
@@ -248,66 +257,48 @@ where nvl(rc_cnt, 1)=1 -- process only those that don't have combinations (Ingre
 and div>=0.9 and u_match=1
 ;
 commit;
-
--- Get the best possible mapping that is unique in its concept class. Try bottom up from the lowest end of the drug hierarchy
-create table best_map nologging as
-with r as (
-  select distinct qr.*, cast(c.concept_code as integer) as concept_code, c.concept_class_id from q_to_r qr join concept c on c.concept_id=qr.r_did 
-)
-select distinct 
-  rmap.q_dcode,  
-  first_value(rmap.r_did) over (partition by rmap.q_dcode, rmap.r_iid order by rmap.concept_code desc) as r_did, 
-rmap.r_iid,
-rmap.bn_prec,
-rmap.rc_cnt,
-rmap.concept_class_id
-from (
--- get the best match within class, with the best brand name, dose form and unit precedence
-  select distinct
-    q_dcode, r_iid,
-    first_value(concept_class_id) over (partition by q_dcode, r_iid order by cclass) as concept_class_id
-  from (  
-    select q_dcode, r_iid, concept_class_id,
-      decode(concept_class_id,
-        'Quant Branded Box', 1,
-        'Quant Clinical Box', 2,
-        'Branded Drug Box', 3,
-        'Clinical Drug Box', 4,   
-        'Quant Branded Drug', 5,
-        'Quant Clinical Drug', 6,
-          'Branded Drug', 7,
-        'Clinical Drug', 8,
-        'Branded Drug Form', 9,
-        'Clinical Drug Form', 10,
-        'Branded Drug Comp', 11,
-        'Clinical Drug Comp', 12,
-        'Ingredient', 13,
-        20
-      ) as cclass    
-    from (
-      select q_dcode, r_iid, concept_class_id, count(8) as cnt
-      from (
-        select q_dcode, 
-          r_iid, -- group by ingredient for the concept classes that keep ingredients individually (Ing, Clin Drug Comp)
-          concept_class_id
-        from r 
-      )
-      group by q_dcode, r_iid, concept_class_id
-    ) where concept_class_id in ('Clinical Drug Comp', 'Ingredient') or cnt<2 -- either Ingredient/Clinica Drug Comp or single map
-  ) 
-) rcnt
-join r rmap on rmap.q_dcode=rcnt.q_dcode and nvl(rmap.r_iid, 0)=nvl(rcnt.r_iid, 0) and rmap.concept_class_id=rcnt.concept_class_id
--- where rmap.q_dcode='C9285'
+--full relationship with classes within RxNorm
+drop table cnc_rel_class; 
+create table cnc_rel_class as
+select ri.*, ci.concept_class_id as concept_class_id_1 , c2.concept_class_id as concept_class_id_2 
+from devv5.concept_relationSHIp ri 
+join devv5.concept ci on ci.concept_id = ri.concept_id_1 
+join devv5.concept c2 on c2.concept_id = ri.concept_id_2 
+where ci.vocabulary_id = 'RxNorm' and ri.invalid_reason is null and ci.invalid_reason is null 
+and  c2.vocabulary_id = 'RxNorm'  and ci.invalid_reason is null 
 ;
-
--- Remove those which have both Ingredient/Drug Comp hits as well as other hits.
-delete from best_map with_i
-where with_i.r_iid is not null and exists (
-  select 1 from best_map no_i where with_i.q_dcode=no_i.q_dcode and no_i.r_iid is null
-);
-
+--define order as combination of attributes number and each attribute weight
+DROP table attrib_cnt;
+create table attrib_cnt as
+select concept_id_1, count (1)|| max(weight) as weight  from (
+select distinct a.concept_id_1, 3 as weight from 
+cnc_rel_class a join cnc_rel_class b on a.concept_id_2 = b.concept_id_1 
+where b.concept_class_id_2 in ('Brand Name')
+union ALL
+select concept_id_1, 1 from cnc_rel_class where concept_class_id_2 in ('Supplier')
+union ALL
+select concept_id_1, 5 from cnc_rel_class where concept_class_id_2 in ('Dose Form')
+union ALL
+select distinct drug_concept_id, 6 from (
+select * from drug_strength where nvl (numerator_value, amount_value) is not null)
+--remove comments when Box_size will be present 
+--union
+--select distinct drug_concept_id, 2 from  (
+--select * from drug_strength where Box_size is not null)
+union ALL
+select distinct drug_concept_id, 4 from  (
+select * from drug_strength where DENOMINATOR_VALUE is not null)
+) group by concept_id_1
+union
+select concept_id , '0' from concept where concept_class_id ='Ingredient' and vocabulary_id like 'RxNorm%'
+;
+--best map
+drop table best_map;
+create table best_map as 
+select distinct  first_value(concept_id_1) over (partition by q_dcode order by weight desc) as r_did , q_dcode
+from attrib_cnt join q_to_r on r_did  = concept_id_1
+;
 commit;
-
 -- Write concept_relationship_stage
 insert /*+ APPEND */ into concept_relationship_stage
 						(concept_code_1,
@@ -340,7 +331,7 @@ commit;
 --drop table relationship_to_concept purge;
 --drop table internal_relationship_stage purge;
 --drop table ds_stage purge;
-/*
+
 drop table r_drug_ing purge;
 drop table r_ing_count purge;
 drop table q_drug_ing purge;
@@ -350,5 +341,6 @@ drop table shared_ing purge;
 drop table q_to_r_anydose purge;
 drop table q_to_r_wdose purge;
 drop table q_to_r purge;
+drop table cnc_rel_class purge;
+drop table attrib_cnt purge;
 drop table best_map purge;
-*/
