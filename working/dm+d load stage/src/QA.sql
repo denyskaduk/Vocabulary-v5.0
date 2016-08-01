@@ -84,7 +84,7 @@
   join drug_concept_stage b on b.concept_code = s.concept_code_2
    and  a.concept_class_id like '%Drug%' and b.concept_class_id ='Ingredient'
   ) and concept_class_id not like '%Pack%'
-  and domain_id = 'Drug' and concept_code not in (select pack_concept_code from pack_content) and invalid_reason is null
+  and domain_id = 'Drug' and concept_code not in (select pack_concept_code from pc_stage) and invalid_reason is null
 
   union
   --Drug (non Component) to Form
@@ -94,7 +94,7 @@
   join drug_concept_stage b on b.concept_code = s.concept_code_2
    and  a.concept_class_id like '%Drug%' and a.concept_class_id not like '%Comp%' and b.concept_class_id ='Dose Form' 
   )
-  and domain_id = 'Drug' and concept_class_id not like '%Pack%' and concept_code not in (select pack_concept_code from pack_content) and invalid_reason is null 
+  and domain_id = 'Drug' and concept_class_id not like '%Pack%' and concept_code not in (select pack_concept_code from pc_stage) and invalid_reason is null 
   union
   --several brand names
   select distinct a.concept_code,'Drug has more than one brand names' from drug_concept_stage a 
@@ -106,6 +106,19 @@
   join internal_relationship_stage s on a.concept_code = s.concept_code_1
   join drug_concept_stage b on b.concept_code =s.concept_code_2
   and b.concept_class_id = 'Brand Name'
+  group by a.concept_code having count(1) >1)
+  and b.domain_id = 'Drug'
+  union
+  --several ingredient equivalents
+  select distinct a.concept_code,'Several ingredient equivalents' from drug_concept_stage a 
+  join internal_relationship_stage s on a.concept_code = s.concept_code_1
+  join drug_concept_stage b on b.concept_code =s.concept_code_2
+  and b.concept_class_id = 'Ingredient'
+  where a.concept_code in (
+  select a.concept_code from drug_concept_stage a 
+  join internal_relationship_stage s on a.concept_code = s.concept_code_1
+  join drug_concept_stage b on b.concept_code =s.concept_code_2
+  and b.concept_class_id = 'Ingredient' and a.concept_class_id = 'Ingredient'
   group by a.concept_code having count(1) >1)
   and b.domain_id = 'Drug'
   union
@@ -234,7 +247,12 @@ join internal_relationship_stage r on r.concept_code_1=c1.concept_code
 join drug_concept_stage c2 on c2.concept_code=r.concept_code_2
 where c1.concept_class_id='Drug Product' and c2.concept_class_id='Drug Product'
 and c1.invalid_reason= 'D'
-
+union
+--internal_relationship_stage duplicates
+select concept_code_1, 'internal_relationship_stage duplicates' from internal_relationship_stage group by concept_code_1, concept_code_2 having count(8)>1
+union
+--> 100 %
+select drug_concept_code, '> 100 %' from ds_stage where numerator_unit ='%' and numerator_value > 100
   ) a join drug_concept_stage b on a.concept_code = b.concept_code where b.invalid_reason is null and b.domain_id = 'Drug'  
    group by error_type
 ;
@@ -278,3 +296,5 @@ create table comb_check as
   group by ingredient, Drug_strength, Dose_form, Brand_name, Quantity_factor, Box_size, Supplier
   ;
   */
+select concept_code_1, concept_code_2 from internal_relationship_stage group by concept_code_1, concept_code_2 having count(8)>1;
+

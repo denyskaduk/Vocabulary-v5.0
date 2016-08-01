@@ -165,20 +165,21 @@ alter table Box_to_Drug add  Box_size integer;
 alter table Box_to_Drug add amount_unit varchar (20);
 alter table Box_to_Drug add  amount_value int;
 ;
+--define that by name difference
 --fill Box_size, amount_unit, amount_value
 update Box_to_Drug
-set amount_value =  regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+') where regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+ (ml|gram|litre|m)') = BOX_AMOUNT
+set amount_value =  regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+') where regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+ (ml|gram|litre|m|dose)') = BOX_AMOUNT
 and CONCEPT_CODE_1 not in (select concept_code_1 from 
 DR_pack_TO_CLIN_DR_BOX_full)
 ;
 update Box_to_Drug
-set amount_unit = regexp_replace (BOX_AMOUNT, '[[:digit:]\.]+ ')  where regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+ (ml|gram|litre|m)') = BOX_AMOUNT
+set amount_unit = regexp_replace (BOX_AMOUNT, '[[:digit:]\.]+ ')  where regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+ (ml|gram|litre|m|dose)') = BOX_AMOUNT
 and CONCEPT_CODE_1 not in (select concept_code_1 from 
 DR_pack_TO_CLIN_DR_BOX_full)
 ;
 update Box_to_Drug
 set Box_size = regexp_substr (BOX_AMOUNT, '^[[:digit:]\.]+')  where  regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+ .*') = BOX_AMOUNT
-and not regexp_like (BOX_AMOUNT, '(ml|gram|litre|m)')
+and not regexp_like (BOX_AMOUNT, '(ml|gram|litre|m|dose)')
 and amount_value is null and amount_unit is null
 and CONCEPT_CODE_1 not in (select concept_code_1 from 
 DR_pack_TO_CLIN_DR_BOX_full)
@@ -187,7 +188,7 @@ update Box_to_Drug
 set Box_size = regexp_substr (regexp_substr (BOX_AMOUNT, '[[:digit:]\.]+ x') , '[[:digit:]]+'),
  amount_value = regexp_substr (regexp_substr (BOX_AMOUNT, 'x [[:digit:]\.]+') , '[[:digit:]\.]+'),
  amount_unit = regexp_replace (regexp_substr  (BOX_AMOUNT, 'x [[:digit:]\.]+[[:alpha:]]+'), 'x [[:digit:]\.]+')
- where  regexp_like (BOX_AMOUNT, '[[:digit:]\.]+ x [[:digit:]\.]+[[:alpha:]]+') 
+ where  regexp_like (BOX_AMOUNT, '[[:digit:]\.]+ x [[:digit:]\.]+[[:alpha:]]+') and BOX_AMOUNT not like  '%unit doses%'
 and amount_value is null and amount_unit is null and box_size is null
 and CONCEPT_CODE_1 not in (select concept_code_1 from 
 DR_pack_TO_CLIN_DR_BOX_full)
@@ -432,8 +433,9 @@ trim(regexp_substr(t.concept_name_chgd, '[^!]+', 1, levels.column_value))  as dr
 from drug_concept_stage_tmp t,
 table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.concept_name_chgd, '[^!]+'))  + 1) as sys.OdciNumberList)) levels where concept_class_id ='Clinical Drug') a
 ;
+--select * from drug_concept_stage_tmp_0 where 
 update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, 'molar', 'mmol/ml');
-update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, '/dose', '');
+--update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, '/dose', '');
 update drug_concept_stage_tmp_0 set dosage = regexp_replace (dosage, '/$', '') where regexp_like (dosage, '/$');
 --select * from drug_concept_stage_tmp_0 where concept_code = 12296111000001106
 --define number of components and ingredients
@@ -446,7 +448,6 @@ alter  table Clinical_to_Ingred_tmp add ingr_cnt int
 ;
 update Clinical_to_Ingred_tmp b set ingr_cnt = ( select cnt from (
 select concept_code_1, count (1) as cnt  from Clinical_to_Ingred_tmp group by concept_code_1) a where a.concept_code_1 = b.concept_code_1)
-;
 ;
 --easiest part -when drug has only one ingredient
 drop table clin_dr_to_ingr_one;
@@ -629,7 +630,7 @@ update ds_all a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )=
 ;
 --need to comment
 update ds_all set amount_value = null, amount_unit = null where regexp_like (concept_name, '[[:digit:]\.]+(litre|ml)') and not regexp_like (concept_name, '/[[:digit:]\.]+(litre|ml)') and amount_value is not null and AMOUNT_UNIT in ('litre', 'ml');
--- need to commeny
+-- need to comment
 update ds_all set denominator_value = regexp_substr (regexp_substr(concept_name, ' [[:digit:]\.]+(litre(s?)|ml)') , '[[:digit:]\.]+'), denominator_unit = regexp_substr (regexp_substr(concept_name, ' [[:digit:]\.]+(litre(s?)|ml)') , '(litre(s?)|ml)')
 where regexp_like (concept_name, '\d+(litre(s?)|ml)') and not regexp_like (concept_name, '/[[:digit:]\.]+(litre(s?)|ml)')
 and denominator_value is  null
@@ -649,28 +650,44 @@ and numerator_unit!='%'
 update ds_all a
 set numerator_value =numerator_value*denominator_value
 where concept_code in (select concept_code from drug_concept_stage where regexp_like (concept_name , '[[:digit:]\.]+.*/ml.*[[:digit:]\.]+ml'))
-and numerator_value is not null and denominator_value is not null and numerator_value !='%'
+and numerator_value is not null and denominator_value is not null and numerator_unit !='%'
 ;
+--normalize BOX_TO_DRUG,  make the same units 
+UPDATE BOX_TO_DRUG
+   SET AMOUNT_UNIT = 'g'
+WHERE AMOUNT_UNIT = 'gram';
+
 -- add Drug Boxes as mix of Boxes and Quant Drugs
 --select * from ds_all where not regexp_like (numerator_VALUE, '[[:digit:]/.]') 
-drop table ds_all_dr_box;
+drop table ds_all_dr_box
+  ;
 create table ds_all_dr_box as 
 select distinct 
 a.concept_code_1, b.INGREDIENT_CONCEPT_CODE,null as AMOUNT_VALUE,null as AMOUNT_UNIT ,
+
 case when b.AMOUNT_VALUE is not null then b.AMOUNT_VALUE*a.amount_value 
-when b.AMOUNT_VALUE is null and numerator_unit !='%' then b.numerator_VALUE*a.amount_value
+when b.AMOUNT_VALUE is null and numerator_unit !='%' and (a.amount_unit = b.denominator_unit or a.amount_unit in ('ml', 'g') and b.denominator_unit in ('ml', 'g') or b.denominator_unit is null 
+
+)
+then b.numerator_VALUE*a.amount_value
 when  b.AMOUNT_VALUE is null and numerator_unit ='%' then cast (b.numerator_VALUE as float)
-else null end as NUMERATOR_VALUE,
+
+else cast (b.numerator_value as float) end as NUMERATOR_VALUE,
 
 case when b.amount_value is not null then b.amount_unit
 else b.numerator_unit end as numerator_unit,
 
-a.AMOUNT_VALUE as DENOMINATOR_VALUE,
+case 
+
+when b.DENOMINATOR_UNIT ='dose' and denominator_unit !=a.amount_unit then cast (b.denominator_value as float)
+else 
+a.AMOUNT_VALUE end as DENOMINATOR_VALUE,
+
 a.AMOUNT_UNIT as denominator_unit, 
 a.BOX_SIZE as BOX_SIZE  
 
 from Box_to_Drug a 
-join ds_all b on a.concept_code_2 = b.concept_code
+join ds_all b on a.concept_code_2 = b.concept_code 
 where a.AMOUNT_VALUE is not null
 
 union 
@@ -803,10 +820,7 @@ update ds_stage a set (a.DENOMINATOR_VALUE, a.DENOMINATOR_unit )=
 update ds_stage set ingredient_concept_code = 'OMOP17' where ingredient_concept_code =  '902251'
 ;
 delete from ds_stage where coalesce (amount_unit, numerator_unit) is null and ingredient_concept_code = '3588811000001104'
-;
-select * from drug_concept_stage where concept_code = '21203111000001102'
-;
---pay an attention! we put here everything including non-drugs
+--pay an attention! we put in ds_stage everything including non-drugs
 ;
 --add branded Drugs to non_drug
 drop table branded_non_drug;
@@ -875,22 +889,22 @@ select distinct b.CONCEPT_CODE_1, b.CONCEPT_NAME_1, DRUG_CONCEPT_CODE,DRUG_CONCE
 from pack_content_1 a join box_to_drug b on a.PACK_CONCEPT_CODE = b.CONCEPT_CODE_2
 where b.CONCEPT_CODE_1 not in (select PACK_CONCEPT_CODE from pack_content_1)
 ;
-truncate table PACK_CONTENT;
-insert into PACK_CONTENT (PACK_CONCEPT_CODE,DRUG_CONCEPT_CODE,AMOUNT)
+truncate table pc_stage;
+insert into pc_stage (PACK_CONCEPT_CODE,DRUG_CONCEPT_CODE,AMOUNT)
 select PACK_CONCEPT_CODE,DRUG_CONCEPT_CODE,AMOUNT from pack_content_1
 ;
 CREATE TABLE PACK_CONTENT_TMP AS 
-SELECT DISTINCT * FROM PACK_CONTENT
+SELECT DISTINCT * FROM pc_stage
 ;
 --delete duplicates
-DROP TABLE PACK_CONTENT
+DROP TABLE pc_stage
 ;
-CREATE TABLE PACK_CONTENT AS (SELECT * FROM PACK_CONTENT_TMP)
+CREATE TABLE pc_stage AS (SELECT * FROM PACK_CONTENT_TMP)
 ;
 DROP TABLE PACK_CONTENT_TMP
 ;
 -- packs are not allowed in ds_stage
-delete from ds_stage where drug_concept_code in (select pack_concept_code from pack_content)
+delete from ds_stage where drug_concept_code in (select pack_concept_code from pc_stage)
 ;
 --non_drugs also are not allowed in ds_stage
 delete from ds_stage where drug_concept_code in (select concept_code from non_drug_full ) 
@@ -988,7 +1002,7 @@ select distinct drug_concept_code, ingredient_concept_code from ds_stage
 ;
 --Drug to Form
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
-select distinct concept_code_1, concept_code_2 from DR_TO_DOSE_form_full where concept_code_1 not in (select PACK_CONCEPT_CODE from  PACK_CONTENT)
+select distinct concept_code_1, concept_code_2 from DR_TO_DOSE_form_full where concept_code_1 not in (select PACK_CONCEPT_CODE from  pc_stage)
 ;
 --Drug to Brand Name 
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
@@ -1000,11 +1014,11 @@ select distinct concept_code_1, concept_code_2 from Drug_to_manufact_2
 ;
 --Ingred to Ingred, for now Ingred to Ingred relationship is considered only as Maps to 
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
-select distinct concept_code_1, concept_code_2 from ingred_to_ingred_FINAL_BY_Lena where CONCEPT_CODE_2 is not null
+select distinct concept_code_1, concept_code_2 from ingred_to_ingred_FINAL_BY_Lena  -- deprecated to active relationship already included here
+where CONCEPT_CODE_2 is not null
 ;
---concept replaced by
 insert into INTERNAL_RELATIONSHIP_STAGE (concept_code_1, concept_code_2)
-select distinct CONCEPT_CODE_1, CONCEPT_CODE_2 from deprec_to_active
+  select concept_code_1, concept_code_2 from deprec_to_active where concept_class_id != 'Ingredient'
 ;
 --RELATIONSHIP_TO_CONCEPT
 --mappings and insertion into standard tables
@@ -1213,7 +1227,7 @@ insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CL
  select distinct                          DRUG_NEW_NAME,'Drug', 'dm+d', 'Drug Product', 'S', DRUG_CODE, TO_DATE ('19700101', 'yyyymmdd'), TO_DATE ('20991231', 'yyyymmdd'), '', 'VMP' from PACK_DRUG_TO_CODE_2_2  where DRUG_CODE like 'OMOP%'
 ;
 --modify classes for Packs
-update drug_concept_stage set concept_class_id = 'Drug Pack' where concept_code  in (select PACK_CONCEPT_CODE from PACK_CONTENT )
+update drug_concept_stage set concept_class_id = 'Drug Pack' where concept_code  in (select PACK_CONCEPT_CODE from pc_stage )
 ;
 --add units 
 insert into  drug_concept_stage (CONCEPT_NAME,DOMAIN_ID,VOCABULARY_ID,CONCEPT_CLASS_ID,STANDARD_CONCEPT,CONCEPT_CODE,VALID_START_DATE,VALID_END_DATE,INVALID_REASON, source_concept_class_id)
@@ -1369,7 +1383,7 @@ update internal_relationship_stage a  set concept_code_2 = (select new_code from
 where a.concept_code_2 like 'OMOP%'
 ;commit
 ;
-update pack_content a  set DRUG_CONCEPT_CODE = (select new_code from code_replace b where a.DRUG_CONCEPT_CODE = b.old_code)
+update pc_stage a  set DRUG_CONCEPT_CODE = (select new_code from code_replace b where a.DRUG_CONCEPT_CODE = b.old_code)
 where a.DRUG_CONCEPT_CODE like 'OMOP%'
 ;
 commit;
@@ -1417,7 +1431,7 @@ where numerator_unit = '%' and DENOMINATOR_UNIT in ('litre')
  update ds_stage ds
 set numerator_value = NUMERATOR_VALUE * 10, 
 numerator_unit = 'mg',
-denominator_unit = 'gram'
+denominator_unit = 'g'
   where exists (select 1 from box_to_drug b join ds_stage ds2 on ds2.drug_concept_code = b.concept_code_1
  where ds2.ingredient_concept_code = ds.ingredient_concept_code and ds.drug_concept_code = b.concept_code_2 and ds.NUMERATOR_UNIT ='%' and  ds2.NUMERATOR_UNIT !='%' and ds2.DENOMINATOR_UNIT in ( 'gram', 'g') )
  ;
@@ -1507,8 +1521,14 @@ and c1.invalid_reason= 'D' and c1.concept_code = c.concept_code);
 
   delete from relationship_to_concept where concept_id_2 = 19135832
 ;
-    commit
+delete from pc_stage where drug_concept_code in (select concept_code from drug_concept_stage where domain_id !='Drug')
+    ;
+    commit; 
+
+update pc_stage pc set drug_concept_code = (select concept_code_2 from deprec_to_active da where da.concept_code_1 =pc.drug_concept_code)
+where exists (select 1 from deprec_to_active da where da.concept_code_1 =pc.drug_concept_code)
 ;
-  --remove comments if you want to delete improper ds_stage entries 
-  /*delete from ds_stage where numerator_value is null and amount_value is null; commit;*/
-  
+UPDATE RELATIONSHIP_TO_CONCEPT
+   SET PRECEDENCE = 1
+WHERE CONCEPT_CODE_1 = '395939008'
+AND   CONCEPT_ID_2 = 1759842;
