@@ -323,6 +323,13 @@ from best_map m
 join concept c on c.concept_id=m.r_did and c.vocabulary_id='RxNorm';
 
 commit;
+--add deprecated relationships exist in devv5.
+select * from concept_relationship_stage
+
+;
+
+
+
 
 /****************************
 * Clean up
