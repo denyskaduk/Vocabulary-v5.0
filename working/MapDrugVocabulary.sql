@@ -301,6 +301,8 @@ from attrib_cnt join q_to_r on r_did  = concept_id_1
 ;
 commit;
 -- Write concept_relationship_stage
+--still thinking about update process
+
 insert /*+ APPEND */ into concept_relationship_stage
 						(concept_code_1,
 						concept_code_2,
@@ -314,23 +316,59 @@ select
   q_dcode as concept_code_1,
   c.concept_code as concept_code_2,  
   (select vocabulary_id from drug_concept_stage where rownum=1) as vocabulary_id_1,
-  'RxNorm' as vocabulary_id_2,
+  c.vocabulary_id as vocabulary_id_2,
   'Maps to' as relationship_id,
   (SELECT latest_update FROM vocabulary WHERE vocabulary_id=(select vocabulary_id from drug_concept_stage where rownum=1)) as valid_start_date,
   TO_DATE ('20991231', 'yyyymmdd') as valid_end_date,
   null as invalid_reason
 from best_map m
-join concept c on c.concept_id=m.r_did and c.vocabulary_id='RxNorm';
-
-commit;
---add deprecated relationships exist in devv5.
-select * from concept_relationship_stage
-
+join concept c on c.concept_id=m.r_did and c.vocabulary_id like 'RxNorm%'
+;
+commit
 ;
 
+/*
+--add deprecated relationships exist in devv5.
+insert into concept_relationship_stage (CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
+select '', '', c1.concept_code, c2.concept_code, c1.vocabulary_id, c2.vocabulary_id, r.relationship_id, r.valid_start_date, TO_DATE ('20160802', 'yyyymmdd'), 'D' from concept_rel_stage_260716 c
+and not exists (select 1 from concept_relationship_stage b where c.concept_code_1 = b.concept_code_1 and c.concept_code_2 = b.concept_code_2 and c.relationship_id = b.relationship_id 
+and b.vocabulary
+--vocabulary_id
+)
+;
+insert into concept_relationship_stage (CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
+select '', '', c1.concept_code, c2.concept_code, c1.vocabulary_id, c2.vocabulary_id, r.relationship_id, r.valid_start_date, TO_DATE ('20160802', 'yyyymmdd'), 'D' from concept_relationship r
+join concept c1 on r.concept_id_1 = c1.concept_id
+join concept c2 on r.concept_id_2 = c2.concept_id
+where c1.vocabulary_id ='DA_France' or c2.vocabulary_id ='DA_France'
+and not exists (select 1 from concept_relationship_stage b where c1.concept_code = b.concept_code_1 and c2.concept_code = b.concept_code_2 and r.relationship_id = b.relationship_id --vocabulary_id
+)
+;
+*/
 
 
 
+
+/*
+select  from concept_relationship r
+join concept c1 on r.concept_id_1 = c1.concept_id
+join concept c2 on r.concept_id_2 = c2.concept_id
+where c1.vocabulary_id ='DA_France' or c2.vocabulary_id ='DA_France' --1189654
+;
+select  count (*) from concept_relationship r --1189654
+join concept c1 on r.concept_id_1 = c1.concept_id
+join concept c2 on r.concept_id_2 = c2.concept_id
+where c2.vocabulary_id ='DA_France'
+
+;
+select distinct relationship_id from concept_relationship r
+join concept c1 on r.concept_id_1 = c1.concept_id
+join concept c2 on r.concept_id_2 = c2.concept_id
+where c1.vocabulary_id ='DA_France' or c2.vocabulary_id ='DA_France' 
+minus
+select distinct relationship_id from concept_rel_stage_260716
+;
+*/
 /****************************
 * Clean up
 *****************************/
