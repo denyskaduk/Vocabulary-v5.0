@@ -40,12 +40,12 @@ where( c1.vocabulary_id ='DA_France' or c2.vocabulary_id ='DA_France' )
 and not exists (select 1 from concept_relationship_stage b where c1.concept_code = b.concept_code_1 and c2.concept_code = b.concept_code_2 and r.relationship_id = b.relationship_id and vocabulary_id_1 = c1.vocabulary_id and
 vocabulary_id_2 = c2.vocabulary_id
 )
-;/*
+;
 BEGIN
    DEVV5.VOCABULARY_PACK.ProcessManualRelationships;
 END;
 COMMIT;
-*/
+
 --concept_stage 
 delete from concept_stage where concept_code like 'OMOP%'
 ;
