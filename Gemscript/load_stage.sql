@@ -59,3 +59,35 @@ null as invalid_reason
 from THIN_GEMSCRIPT_MAP;
 
 commit;
+
+;
+create table THIN_to_rx as
+select concept_code_1, concept_name_1, concept_code_2,concept_name_2, min (lvl) from (
+select a.concept_code as concept_code_1, a.concept_name as concept_name_1, nvl (e.concept_code, d.concept_code) as concept_code_2, nvl (e.concept_name, d.concept_name) as concept_name_2,
+nvl (e.vocabulary_id, d.vocabulary_id) as vocabulary_id_2,
+ nvl (min_level_of_separation, 0) as lvl
+
+ from concept_stage a --'Gemscript THIN'
+ join concept_relationship_stage rt on a.concept_code = rt.concept_code_1 
+join concept_stage bt on  bt.concept_code = rt.concept_code_2 and vocabulary_id = 'Gemscript' and concept_class_id = 'Gemscript'
+
+join concept_relationship_stage r on bt.concept_code = r.concept_code_1 
+join concept b on  b.concept_code = r.concept_code_2 and vocabulary_id = 'dm+d'
+
+join concept_relationship rd on rd.concept_id_1 = b.concept_id
+join  concept d on  d.concept_id = r.concept_id_2 and vocabulary_id like 'RxNorm%'
+join dev_dmd.concept_ancestor on ancestor_concept_id = d.concept_id
+left join concept e on e.concept_id = descendant_concept_id and not regexp_like (e.concept_class_id, 'Branded|Box|Manufact') and regexp_like (d.concept_class_id, 'Branded|Box|Manufact')
+
+where a.concept_class_id= 'Gemscript THIN'
+) group by concept_code_1, concept_name_1,concept_code_2,concept_name_2, vocabulary_id_2
+;
+delete from concept_relationship_stage a where exists (select 1 from concept_stage c where concept_class_id = 'Gemscript THIN' and a.concept_code_1 = concept_code)
+;
+commit
+;
+insert into concept_relationship_stage (CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
+select '', '', CONCEPT_CODE_1,CONCEPT_CODE_2, 'Gemscript', vocabulary_id_2, 'Maps to', (select latest_update from vocabulary where vocabulary_id = 'Gemscript'),TO_DATE ('20991231', 'yyyymmdd'), '' from THIN_to_rx
+;
+commit
+;
