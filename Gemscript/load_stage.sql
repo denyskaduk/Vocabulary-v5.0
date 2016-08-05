@@ -59,8 +59,8 @@ null as invalid_reason
 from THIN_GEMSCRIPT_MAP;
 
 commit;
-
 ;
+/*
 create table THIN_to_rx as
 select concept_code_1, concept_name_1, concept_code_2,concept_name_2, min (lvl) from (
 select a.concept_code as concept_code_1, a.concept_name as concept_name_1, nvl (e.concept_code, d.concept_code) as concept_code_2, nvl (e.concept_name, d.concept_name) as concept_name_2,
@@ -82,7 +82,32 @@ left join concept e on e.concept_id = descendant_concept_id and not regexp_like 
 where a.concept_class_id= 'Gemscript THIN'
 ) group by concept_code_1, concept_name_1,concept_code_2,concept_name_2, vocabulary_id_2
 ;
-delete from concept_relationship_stage a where exists (select 1 from concept_stage c where concept_class_id = 'Gemscript THIN' and a.concept_code_1 = concept_code)
+*/
+;
+--rebuild relationships with final 
+drop table THIN_to_rx;
+create table THIN_to_rx as
+select distinct a.concept_code as concept_code_1, a.concept_name as concept_name_1, nvl (rd3.concept_code, e.concept_code) as concept_code_2, nvl (rd3.concept_name, e.concept_name) as concept_name_2,
+nvl (rd3.vocabulary_id, e.vocabulary_id) as vocabulary_id_2
+--distinct a.concept_class_id, d.concept_class_id,rd2.relationship_id, e.concept_class_id, rd3.concept_class_id
+ from concept_stage a --'Gemscript THIN'
+ join concept_relationship_stage rt on a.concept_code = rt.concept_code_1 
+join concept_stage bt on  bt.concept_code = rt.concept_code_2 and bt.vocabulary_id = 'Gemscript' and bt.concept_class_id = 'Gemscript'
+
+join concept_relationship_stage r on bt.concept_code = r.concept_code_1 
+join dev_dmd.concept b on  b.concept_code = r.concept_code_2 and b.vocabulary_id = 'dm+d' and b.domain_id = 'Drug'
+
+join dev_dmd.concept_relationship rd on rd.concept_id_1 = b.concept_id
+join  dev_dmd.concept d on  d.concept_id = rd.concept_id_2 and d.vocabulary_id like 'RxNorm%'
+left join (select * from dev_dmd.concept_relationship rd2 
+join  dev_dmd.concept e on  e.concept_id = rd2.concept_id_2 and e.vocabulary_id like 'RxNorm%') rd2 on rd2.concept_id_1 = d.concept_id and rd2.relationship_id in ('Tradename of', 'Marketed form of') 
+
+left join (select * from dev_dmd.concept_relationship rd3 
+join  dev_dmd.concept f on  f.concept_id = rd3.concept_id_2 and f.vocabulary_id like 'RxNorm%' and rd3.relationship_id = 'Tradename of') rd3 on rd3.concept_id_1 = rd2.concept_id and regexp_replace (rd3.concept_class_id, 'Clinical', 'Branded') = rd2.concept_class_id
+where a.concept_class_id= 'Gemscript THIN'
+;
+delete
+ from concept_relationship_stage a where exists (select 1 from concept_stage c where concept_class_id = 'Gemscript THIN' and a.concept_code_1 = concept_code)
 ;
 commit
 ;
@@ -91,3 +116,4 @@ select '', '', CONCEPT_CODE_1,CONCEPT_CODE_2, 'Gemscript', vocabulary_id_2, 'Map
 ;
 commit
 ;
+

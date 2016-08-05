@@ -41,11 +41,13 @@ and not exists (select 1 from concept_relationship_stage b where c1.concept_code
 vocabulary_id_2 = c2.vocabulary_id
 )
 ;
+--remove comments while we execute this 
+/*
 BEGIN
    DEVV5.VOCABULARY_PACK.ProcessManualRelationships;
 END;
 COMMIT;
-
+*/
 --concept_stage 
 delete from concept_stage where concept_code like 'OMOP%'
 ;
