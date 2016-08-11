@@ -51,6 +51,8 @@ COMMIT;
 --concept_stage 
 delete from concept_stage where concept_code like 'OMOP%'
 ;
+update concept_stage set standard_concept = null
+;
 commit
 ;
 truncate table drug_strength_stage 

@@ -326,7 +326,6 @@ join concept c on c.concept_id=m.r_did and c.vocabulary_id like 'RxNorm%'
 ;
 commit
 ;
-
 /*
 --add deprecated relationships exist in devv5.
 insert into concept_relationship_stage (CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)
@@ -392,3 +391,8 @@ drop table attrib_cnt purge;
 drop table best_map purge;
 
  select * from dev_rxnorm.replaced_atc
+;
+select * from q_to_r_wdose qr
+join drug_concept_stage cn on qr.Q_DCODE = cn.concept_code
+join concept c on qr.r_did = c.concept_id
+where cn.concept_name != c.concept_name and regexp_like (cn.concept_name, 'Inject') and not regexp_like  (c.concept_name, 'Inject')  --and c.concept_class_id ='Clinical Drug'
