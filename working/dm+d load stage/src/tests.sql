@@ -1050,3 +1050,123 @@ SELECT * FROM internal_relationship_stage ir
 join drug_concept_stage c on c.concept_code = ir.concept_code_2
 join drug_concept_stage c1 on c1.concept_code = ir.concept_code_1 and c.concept_class_id = 'Dose Form'
 WHERE C1.CONCEPT_CODE = '28048111000001100'
+;
+create table ingr_comb as 
+select distinct c.concept_id, listagg(c2.cocnept_id, '-') as ing_combo_id within group (order by c.concept_id) as ing_code 
+from concept c 
+join concept_relationship r
+join concept c2 on c2.concept_id = r.concept_id_2 
+where c.vocabulary_id like 'RxNorm%'
+and c.vocabulary_id like 'RxNorm%'
+;
+
+select c1.concept_code as c1_code, c1.concept_name as c1_name, c1.concept_class_id as c1_class,
+  c2.concept_code as c2_code, c2.concept_name as c2_name, c2.vocabulary_id as c2_vocab, c2.concept_class_id as c2_class,
+  r.precedence as prec, r.conversion_factor as fac
+from drug_concept_stage c1
+join relationship_to_concept r on r.concept_code_1=c1.concept_code 
+join concept c2 on c2.concept_id=r.concept_id_2
+where c1.concept_code in ('12227711000001101', '4218111000001103');
+
+select * from devv5.concept where concept_id ='990499'
+;
+
+select concept_name from devv5.concept where vocabulary_id = 'RxNorm Extension' group by concept_name having count (1) >1
+;
+select * from drug_concept_stage where concept_name = 'Injectable'
+;
+select * from ds_stage where denominator_unit ='g' and rownum < 100
+;
+select * from complete_ds where drug_concept_code ='XXX121646'
+;
+select * from relationship_to_concept where concept_id_2 = 8576
+;
+select * from unique_ds where numerator_value = 1000
+;
+select * from complete_ds where drug_concept_code ='XXX131811'
+;
+select * from complete_name where concept_code = 'XXX131811'
+;
+select * from drug_concept_stage where lower (concept_name) like '%benzoyl%'
+;
+select * from ds_stage where drug_concept_code ='3738011000001100'
+;
+select * from devv5.concept where domain_id = 'Route'
+;
+select * from unique_ds where numerator_value =
+;
+select * from relationship_to_concept where upper( concept_code_1 )= 'G'
+;
+select * from ds_stage where numerator_unit ='%'
+;
+select * from concept where concept_id = 8554
+;
+select * from devv5.concept where  vocabulary_id = 'RxNorm' and concept_name like '%\%%' escape '\'; select * from devv5.drug_strength where drug_concept_id = 40003190;
+;
+select * from devv5.concept where concept_id = 1943955
+;
+select * from 
+select * from devv5.vocabulary where vocabulary_id ='dm+d'
+ 
+drug_concept_stage_existing 
+;
+select * from dev_dmd.drug_concept_stage where concept_name like 'Powder'
+;
+select * from internal_relationship_stage
+join drug_concept_stage on concept_code = concept_code_1
+
+ where concept_code_2='85581007'
+ ;
+ select * from relationship_to_concept 
+ join concept on concept_id = concept_id_2
+ where concept_code_1='85581007'
+ ;
+ select c1.concept_code as c1_code, c1.concept_name as c1_name, c1.concept_class_id as c1_class,
+  c2.concept_code as c2_code, c2.concept_name as c2_name, c2.vocabulary_id as c2_vocab, c2.concept_class_id as c2_class,
+  r.precedence as prec, r.conversion_factor as fac
+from drug_concept_stage c1
+join relationship_to_concept r on r.concept_code_1=c1.concept_code 
+join concept c2 on c2.concept_id=r.concept_id_2
+where c1.concept_code in ('litre');
+ 
+select r.*, c.* from relationship_to_concept r
+join concept c on concept_id = concept_id_2
+join drug_concept_stage dc on dc.concept_code = r.concept_code_1 and dc.concept_class_id ='Unit'
+; 
+ --where concept_code_1 = 'litre'
+;
+select * from concept where lower (concept_name ) like '%kilounit%' and vocabulary_id = 'UCUM'
+;
+select * from ds_stage where drug_concept_code in ('19807111000001106');
+
+select * from drug_concept_Stage where concept_code  in ('19807311000001108');
+
+select * from branded_to_clinical where concept_code_1  in ('19807311000001108');
+
+select * from ds_omop_0 where DRUG_CODE in ('19807111000001106')
+;
+select * from ds_all_tmp where CONCEPT_CODE = '19807111000001106'
+;
+select * from ds_all_cl_dr where CONCEPT_CODE_1
+  in ('19807111000001106');
+  
+select * from BOX_TO_DRUG where CONCEPT_CODE_1    in ('19807111000001106');
+
+select * from
+ Box_to_Drug a 
+join ds_all b on a.concept_code_2 = b.concept_code 
+where a.AMOUNT_VALUE is not null
+and b.AMOUNT_VALUE is null and numerator_unit !='%' and (a.amount_unit = b.denominator_unit or a.amount_unit in ('ml', 'g') and b.denominator_unit in ('ml', 'g') or b.denominator_unit is null )
+;
+select * from drug_concept_stage_tmp_0 where concept_code = '353186000'
+;
+select * from drug_concept_stage_tmp_0 where drug_comp like '%/%' and dosage not like '%/%'
+;
+select regexp_substr 
+('Polymyxin B 10,000units/g', 
+'[[:digit:]\,\.]+(mg|%|ml|mcg|hr|hours|unit(s?)|iu|g|microgram(s*)|u|mmol|c|gm|litre|million unit(s?)|nanogram(s)*|x|ppm|million units| Kallikrein inactivator units|kBq|microlitres|MBq|molar|micromol)/*[[:digit:]\,\.]*(g|dose|ml|mg|ampoule|litre|hour(s)*|h|square cm|microlitres|unit dose|drop)*') as dosage
+from dual
+;
+--duplicate names in RxNorm Extension
+select concept_name from dev_dmd.concept_stage where vocabulary_id = 'RxNorm Extension' group by concept_name having count (1) >1
+;

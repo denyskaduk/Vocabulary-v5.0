@@ -157,7 +157,7 @@ WHERE B.INVALID_REASON IS NOT NULL AND C.INVALID_REASON IS NULL
 alter table Box_to_Drug
 add  Box_amount varchar (250)
 ;
---define that by name difference
+--define that by name differences
 update Box_to_Drug
 set Box_amount = replace (CONCEPT_NAME_1, CONCEPT_NAME_2||' ', '')
 ;
@@ -506,6 +506,14 @@ GROUP BY concept_code HAVING COUNT (1) =1
 and z.invalid_reason is null
 and a.INGR_CNT =1
 ;
+--manual update
+UPDATE CLIN_DR_TO_INGR_3
+   SET DOSAGE = '10,000unit/g'
+WHERE DOSAGE = '"10,000unit"';
+UPDATE CLIN_DR_TO_INGR_3
+   SET DOSAGE = '500unit/g'
+WHERE DOSAGE = '500unit';
+
 drop table ds_all_tmp;
 create table ds_all_tmp as 
 select DOSAGE,DRUG_COMP,CONCEPT_NAME,CONCEPT_CODE,INGREDIENT_CONCEPT_CODE,INGREDIENT_CONCEPT_NAME , cast ('' as varchar (200)) as volume  from clin_dr_to_ingr_one where concept_code not in (select concept_code from ds_by_lena_1)
@@ -665,7 +673,7 @@ create table ds_all_dr_box as
 select distinct 
 a.concept_code_1, b.INGREDIENT_CONCEPT_CODE,null as AMOUNT_VALUE,null as AMOUNT_UNIT ,
 
-case when b.AMOUNT_VALUE is not null then b.AMOUNT_VALUE*a.amount_value 
+case when b.AMOUNT_VALUE is not null then cast ( b.AMOUNT_VALUE as int)
 when b.AMOUNT_VALUE is null and numerator_unit !='%' and (a.amount_unit = b.denominator_unit or a.amount_unit in ('ml', 'g') and b.denominator_unit in ('ml', 'g') or b.denominator_unit is null 
 
 )
@@ -1532,3 +1540,27 @@ UPDATE RELATIONSHIP_TO_CONCEPT
    SET PRECEDENCE = 1
 WHERE CONCEPT_CODE_1 = '395939008'
 AND   CONCEPT_ID_2 = 1759842;
+
+UPDATE RELATIONSHIP_TO_CONCEPT
+   SET PRECEDENCE = 5
+WHERE CONCEPT_CODE_1 = '85581007'
+AND   CONCEPT_ID_2 = 19082104;
+UPDATE RELATIONSHIP_TO_CONCEPT
+   SET PRECEDENCE = 1
+WHERE CONCEPT_CODE_1 = '85581007'
+AND   CONCEPT_ID_2 = 19082170;
+UPDATE RELATIONSHIP_TO_CONCEPT
+   SET PRECEDENCE = 4
+WHERE CONCEPT_CODE_1 = '85581007'
+AND   CONCEPT_ID_2 = 19082103;
+UPDATE RELATIONSHIP_TO_CONCEPT
+   SET PRECEDENCE = 3
+WHERE CONCEPT_CODE_1 = '85581007'
+AND   CONCEPT_ID_2 = 19082286;
+UPDATE RELATIONSHIP_TO_CONCEPT
+   SET PRECEDENCE = 2
+WHERE CONCEPT_CODE_1 = '85581007'
+AND   CONCEPT_ID_2 = 19095976;
+
+commit
+;
