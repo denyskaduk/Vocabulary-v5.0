@@ -151,6 +151,8 @@ and coalesce(q_sp.concept_id_2, /*r_df.concept_id_2, */0)=coalesce(r_sp.concept_
 --and coalesce(q_bs.box_size, /*q_bs.box_size, */0)=coalesce(r_sp.box_sizw, q_sp.box_size, 0) 
 and coalesce(q_qnt.quant_f, /*r_sp.concept_id_2, */'X')=coalesce(r_qnt.quant_f, q_qnt.quant_f, 'X') 
 ;
+select * from q_to_r_wdose
+;
 -- Add matching of dose and its units
 --drop table q_to_r_wdose ;
 create table q_to_r_wdose nologging as
@@ -160,7 +162,7 @@ with q as (
     q_ds.amount_value*q_ds_a.conversion_factor as amount_value, q_ds_a.concept_id_2 as amount_unit_concept_id, 
     q_ds.numerator_value*q_ds_n.conversion_factor as numerator_value, q_ds_n.concept_id_2 as numerator_unit_concept_id,
     nvl(q_ds.denominator_value, 1)*nvl(q_ds_d.conversion_factor, 1) as denominator_value, q_ds_d.concept_id_2 as denominator_unit_concept_id,
-    coalesce(q_ds_a.precedence, q_ds_n.precedence, q_ds_d.precedence) as u_prec/*, box_size*/
+    coalesce(q_ds_a.precedence, q_ds_n.precedence, q_ds_d.precedence) as u_prec, box_size
   from ds_stage q_ds
   left join relationship_to_concept q_ds_a on q_ds_a.concept_code_1=q_ds.amount_unit -- amount units
   left join relationship_to_concept q_ds_n on q_ds_n.concept_code_1=q_ds.numerator_unit -- numerator units
@@ -256,6 +258,52 @@ from q_to_r_wdose
 where nvl(rc_cnt, 1)=1 -- process only those that don't have combinations (Ingredients and Clin Drug Components)
 and div>=0.9 and u_match=1
 ;
+--possible mapping with different dosages for different ingredient, each ingredient should be unique
+create table poss_map as
+select distinct b.* from (
+select dcs.concept_name as concept_name_1,dcs.concept_code, concept.concept_name as concept_name_2, concept.concept_id, RC_CNT, ingredient_concept_id, count (1) as cnt
+ from q_to_r_anydose
+join ds_stage ds1 on q_dcode = drug_concept_code
+join drug_strength ds2 on r_did = drug_concept_id and r_iid = ingredient_concept_id
+and 'x'|| nvl (ds1.numerator_value/nvl (ds1.DENOMINATOR_VALUE, 1), '0') = 'x'|| nvl (ds2.numerator_value/nvl (ds2.DENOMINATOR_VALUE, 1), '0')
+and 'x'|| nvl (ds1.amount_value, '0')= 'x'|| nvl (ds2.amount_value, '0') 
+join drug_concept_stage dcs on dcs.concept_code = Q_DCODE 
+join concept on concept_id = R_DID
+where rc_cnt >1 
+group by dcs.concept_name,dcs.concept_code, concept.concept_name, concept.concept_id, RC_CNT,  ingredient_concept_id
+) a-- where cnt >= rc_cnt
+join 
+(
+select dcs.concept_name as concept_name_1,dcs.concept_code, concept.concept_name as concept_name_2, concept.concept_id , RC_CNT,  count (1) as cnt
+ from q_to_r_anydose
+join ds_stage ds1 on q_dcode = drug_concept_code
+join drug_strength ds2 on r_did = drug_concept_id and r_iid = ingredient_concept_id
+and 'x'|| nvl (ds1.numerator_value/nvl (ds1.DENOMINATOR_VALUE, 1), '0') = 'x'|| nvl (ds2.numerator_value/nvl (ds2.DENOMINATOR_VALUE, 1), '0')
+and 'x'|| nvl (ds1.amount_value, '0')= 'x'|| nvl (ds2.amount_value, '0') 
+join drug_concept_stage dcs on dcs.concept_code = Q_DCODE 
+join concept on concept_id = R_DID
+where rc_cnt >1 
+group by dcs.concept_name,dcs.concept_code, concept.concept_name, concept.concept_id ,RC_CNT
+) b on a.CONCEPT_CODE = b.concept_code and a.concept_id = b.concept_id
+join 
+(
+select dcs.concept_name as concept_name_1,dcs.concept_code, concept.concept_name as concept_name_2, concept.concept_id, RC_CNT, ingredient_concept_code, count (1) as cnt from q_to_r_anydose
+join ds_stage ds1 on q_dcode = drug_concept_code
+join drug_strength ds2 on r_did = drug_concept_id and r_iid = ingredient_concept_id
+and 'x'|| nvl (ds1.numerator_value/nvl (ds1.DENOMINATOR_VALUE, 1), '0') = 'x'|| nvl (ds2.numerator_value/nvl (ds2.DENOMINATOR_VALUE, 1), '0')
+and 'x'|| nvl (ds1.amount_value, '0')= 'x'|| nvl (ds2.amount_value, '0') 
+join drug_concept_stage dcs on dcs.concept_code = Q_DCODE 
+join concept on concept_id = R_DID
+where rc_cnt >1 
+group by dcs.concept_name,dcs.concept_code, concept.concept_name, concept.concept_id, RC_CNT,  ingredient_concept_code
+) c
+on a.CONCEPT_CODE = c.concept_code and a.concept_id = c.concept_id
+where  b.cnt >= b.rc_cnt and a.cnt =1 and c.cnt = 1
+; 
+--insert possible mappings if they are not already present in q_to_r
+insert into q_to_r (Q_DCODE,R_DID) 
+select concept_code, concept_id from poss_map b where not exists (select 1 from q_to_r a where a.Q_DCODE = concept_code and R_DID = concept_id)
+;
 commit;
 --full relationship with classes within RxNorm
 drop table cnc_rel_class; 
@@ -299,6 +347,7 @@ create table best_map as
 select distinct  first_value(concept_id_1) over (partition by q_dcode order by weight desc) as r_did , q_dcode
 from attrib_cnt join q_to_r on r_did  = concept_id_1
 ;
+select * from best_map;
 commit;
 -- Write concept_relationship_stage
 --still thinking about update process
@@ -326,6 +375,7 @@ join concept c on c.concept_id=m.r_did and c.vocabulary_id like 'RxNorm%'
 ;
 commit
 ;
+
 /*
 --add deprecated relationships exist in devv5.
 insert into concept_relationship_stage (CONCEPT_ID_1,CONCEPT_ID_2,CONCEPT_CODE_1,CONCEPT_CODE_2,VOCABULARY_ID_1,VOCABULARY_ID_2,RELATIONSHIP_ID,VALID_START_DATE,VALID_END_DATE,INVALID_REASON)

@@ -1170,3 +1170,101 @@ from dual
 --duplicate names in RxNorm Extension
 select concept_name from dev_dmd.concept_stage where vocabulary_id = 'RxNorm Extension' group by concept_name having count (1) >1
 ;
+select * from concept where concept_id = 19054265
+;
+
+SElect * from concept where lower (concept_name ) like '%renitec%' and vocabulary_id = 'RxNorm'
+;
+SElect * from drug_concept_stage where lower (concept_name ) like '%rantec%'-- and vocabulary_id = 'RxNorm'
+;
+select * from relationship_to_concept where concept_code_1 ='OMOP247684'
+;
+select * from concept where concept_id in (19017203, 19037558);
+;
+select * from concept where concept_name = 'penicillin G procaine'
+;
+select * from drug_strength where drug_concept_id in (19017203, 19037558)
+;
+select * from concept where concept_id not in (select concept_id_1 from concept_relationship where relationship_id = 'Marketed form of')
+and vocabulary_id ='RxNorm Extension' and concept_class_id ='Marketed Product' and concept.invalid_reason is null and concept.standard_concept is not null
+;
+--duplicate names in RxNorm Extension
+select concept_name, invalid_reason from concept where vocabulary_id = 'RxNorm Extension' group by concept_name, invalid_reason having count (1) >1
+;
+--not all Branded Products have 'Tradename of' relationship
+select * from concept where concept_id not in (select concept_id_1 from concept_relationship where relationship_id = 'Tradename of')
+and vocabulary_id ='RxNorm Extension' and concept_class_id like '%Branded%' and concept.invalid_reason is null and concept.standard_concept is not null
+;
+select * from dev_dmd.concept where lower (concept_name) like '%timolol%/%dorzolamide%'
+and vocabulary_id = 'RxNorm Extension'
+;
+select * from dev_dmd.concept where lower (concept_name) like '%dorzolamide%/%timolol%'
+and vocabulary_id like 'RxNorm%'
+;
+select * from concept where concept_name like '% / %' and vocabulary_id ='RxNorm' and invalid_reason is null
+; 
+select * from concept where concept_name like '% / %' and vocabulary_id ='RxNorm Extension' and invalid_reason is null and rownum < 100
+;
+select * from concept c1
+ join drug_strength ds1 on c1.drug_concept_id = ds1.concept_id
+ join drug_strength ds2 using (INGREDIENT_CONCEPT_ID,nvl (AMOUNT_VALUE, ' '),nvl (AMOUNT_UNIT_CONCEPT_ID, ' '), nvl (NUMERATOR_VALUE, ' '),nvl (NUMERATOR_UNIT_CONCEPT_ID, ' '),
+ nvl (DENOMINATOR_VALUE, ' '),nvl (DENOMINATOR_UNIT_CONCEPT_ID, ' '),nvl (BOX_SIZE, ' '))
+ join concept c2 on c2.concept_name != c1.concept_name and c2.concept_id = ds2.drug_concept_id
+where c1.vocabulary_id like 'RxNorm%' and c2.vocabulary_id like 'RxNorm%'
+;
+create table dupl_attrib as
+select distinct c1.*, c2.concept_id as concept_id_2, c2.concept_name as concept_name_2, c2.vocabulary_id as vocabulary_id_2,c2.invalid_reason as invalid_reason_2 from concept c1 
+join ri_agg ri1  on ri1.CONCEPT_ID_1 = c1.CONCEPT_ID  
+join ri_agg ri2 on ri1.INGRED_COMBO  = ri2.INGRED_COMBO
+ join concept c2 on c2.concept_id  = ri2.concept_id_1
+left join ds_agg ds1 on ds1.drug_concept_id = c1.concept_id
+left join ds_agg ds2 on  ds1.INGRED_COMBo = ds2.INGRED_COMBo and
+ nvl(ds1.AMOUNT_COMBO, 0) = nvl(ds2.AMOUNT_COMBO, 0) and
+nvl( ds1.DOSE_COMBO, 0) = nvl( ds2.DOSE_COMBO, 0) and
+nvl( ds1.DENOMINATOR_VALUE, 0) = nvl (ds2.DENOMINATOR_VALUE, 0) and
+nvl( ds1.DENOMINATOR_UNIT_CONCEPT_Id, 0)=nvl (ds2.DENOMINATOR_UNIT_CONCEPT_Id, 0) and
+nvl( ds1.BOX_SIZE, 0)= nvl (ds2.BOX_SIZE, 0)
+left   join cnc_rel_class r1 on r1.CONCEPT_ID_1 = c1.CONCEPT_ID and r1.CONCEPT_CLASS_ID_2 = 'Dose Form'
+left  join cnc_rel_class r2 on r2.CONCEPT_ID_1 = c2.CONCEPT_ID and r2.CONCEPT_CLASS_ID_2 = 'Dose Form' and nvl (r1.concept_id_2, 1)  = nvl (r2.concept_id_2, 1)
+
+left  join cnc_rel_class rb2 on r2.CONCEPT_ID_1 = c2.CONCEPT_ID and rb2.CONCEPT_CLASS_ID_2 = 'Brand Name' and nvl ( rb1.concept_id_2, 1)  = nvl (rb2.concept_id_2, 1) 
+   where c1.vocabulary_id like 'RxNorm%' and c2.vocabulary_id like 'RxNorm%' and lower (c2.concept_name) != lower (c1.concept_name)
+;
+select * from ds_agg
+;
+--Clinical Drug Form
+select distinct c1.*, c2.concept_id as concept_id_2, c2.concept_name as concept_name_2, c2.vocabulary_id as vocabulary_id_2,c2.invalid_reason as invalid_reason_2 from concept c1 
+join ri_agg ri1  on ri1.CONCEPT_ID_1 = c1.CONCEPT_ID  
+join ri_agg ri2 on ri1.INGRED_COMBO  = ri2.INGRED_COMBO
+ join concept c2 on c2.concept_id  = ri2.concept_id_1
+  join cnc_rel_class r1 on r1.CONCEPT_ID_1 = c1.CONCEPT_ID and r1.CONCEPT_CLASS_ID_2 = 'Dose Form'
+ join cnc_rel_class r2 on r2.CONCEPT_ID_1 = c2.CONCEPT_ID and r2.CONCEPT_CLASS_ID_2 = 'Dose Form' and nvl (r1.concept_id_2, 1)  = nvl (r2.concept_id_2, 1)
+ where  c1.vocabulary_id like 'RxNorm%' and c2.vocabulary_id like 'RxNorm%' and lower (c2.concept_name) != lower (c1.concept_name) and c1.concept_class_id = c2.concept_class_id
+ ;
+-- EXPLAIN PLAN FOR
+  create table compl_concept_stage_2 as
+   select distinct ds_agg.*, r1.concept_id_2 as Ingred_id, rb1.concept_id_2 as Brand_Name_id, rm1.concept_id_2 as Supplier_id 
+   from ds_agg 
+    left join (select * from cnc_rel_class r1 where r1.CONCEPT_CLASS_ID_2 = 'Dose Form') r1 on r1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID 
+    left join (select * from cnc_rel_class rb1 where  rb1.CONCEPT_CLASS_ID_2 = 'Brand Name') rb1 on rb1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID 
+     left join ( select * from  cnc_rel_class rm1 where rm1.CONCEPT_CLASS_ID_2 = 'Supplier' ) rm1 on rm1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID  
+ ;  
+ SELECT * FROM TABLE (dbms_xplan.display); select count (1) from cnc_rel_class;
+ ;
+  --union select ri_agg.*, '0','0','0','0','0' from ri_agg 
+create table compl_concept_stage_2 as
+   select distinct ds_agg.*, c.concept_name, r1.concept_id_2 as Ingred_id, rb1.concept_id_2 as Brand_Name_id, rm1.concept_id_2 as Supplier_id 
+   from (select * from ds_agg union select ri_agg.*, '0','0',0,0,0 from ri_agg ) ds_agg
+   join concept c  on ds_agg.drug_CONCEPT_ID  = c.concept_id
+    left join cnc_rel_class r1 on r1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID and r1.CONCEPT_CLASS_ID_2 = 'Dose Form'
+    left join cnc_rel_class rb1 on r1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID and rb1.CONCEPT_CLASS_ID_2 = 'Brand Name'
+     left join cnc_rel_class rm1 on r1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID and rm1.CONCEPT_CLASS_ID_2 = 'Supplier'
+     ;
+     
+  create table compl_concept_stage_2 as
+   select distinct ds_agg.*, r1.concept_id_2 as Ingred_id, rb1.concept_id_2 as Brand_Name_id, rm1.concept_id_2 as Supplier_id 
+  from (select * from ds_agg union select ri_agg.*, '0','0',0,0,0 from ri_agg ) ds_agg
+   join concept c  on ds_agg.drug_CONCEPT_ID  = c.concept_id
+    left join (select * from cnc_rel_class r1 where r1.CONCEPT_CLASS_ID_2 = 'Dose Form') r1 on r1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID 
+    left join (select * from cnc_rel_class rb1 where  rb1.CONCEPT_CLASS_ID_2 = 'Brand Name') rb1 on rb1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID 
+     left join ( select * from  cnc_rel_class rm1 where rm1.CONCEPT_CLASS_ID_2 = 'Supplier' ) rm1 on rm1.CONCEPT_ID_1 = ds_agg.drug_CONCEPT_ID  
