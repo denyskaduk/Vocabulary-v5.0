@@ -227,3 +227,5 @@ where  valid_end_date <=SYSDATE or valid_end_date = to_date ('2099-12-31', 'YYYY
 union
 --Improper valid_start_date
 select concept_code, 'Improper valid_start_date' from drug_concept_stage where valid_start_date >  SYSDATE
+union 
+select drug_concept_code, 'Both amount and numerator values are not null' from ds_stage where amount_value is not null and numerator_value is not null
