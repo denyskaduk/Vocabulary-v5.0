@@ -1,5 +1,5 @@
 --"reboot" drug_concept_stage
-drop table drug_concept_stage
+drop table drug_concept_stage; 
 ;
 create table drug_concept_stage as select * from
 drug_concept_stage_existing
@@ -1477,7 +1477,7 @@ and denominator_unit is null and denominator_value is null
 and exists (select 1 from drug_concept_stage dcs  where dcs.concept_code  = ds.drug_concept_code and not regexp_like (concept_name, 'vial|drops|foam'))
 ;
 commit
-;
+; 
 --manual changes ds_stage
 --sum 
 DELETE
