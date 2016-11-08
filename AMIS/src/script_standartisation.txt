@@ -1,0 +1,6 @@
+write 
+proper ctl-file
+download and proceeding instructions
+define the manaul tables, turn INSERT statement into tables with corresponding ctl-files
+(or remain as INSERT but include into script run)
+
