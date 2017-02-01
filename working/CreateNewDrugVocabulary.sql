@@ -81,9 +81,13 @@ select ds_seq.nextval as ds_code, ds.* from (
     end as numerator_value, 
     nvl(numerator_unit, ' ') as numerator_unit, 
     nvl(denominator_unit, ' ') as denominator_unit
-  from ds_stage
+  from ds_stage d
   where coalesce(amount_value, numerator_value) is not null -- needs to have at least one value 
   and coalesce(amount_unit, numerator_unit) is not null -- needs to have at least one unit
+  and not exists (select null from ds_stage -- this condition allows to exclude drugs if such drugs has empty dosages ingredients
+                  where drug_concept_code = d.drug_concept_code
+                        and amount_value is null and numerator_value is null -- exclude drugs which has ingredients with empty 'value dosages'
+                        and amount_unit is null and numerator_unit is null) -- exclude drugs which has ingredients with empty 'unit dosages'
 ) ds
 ;
 
