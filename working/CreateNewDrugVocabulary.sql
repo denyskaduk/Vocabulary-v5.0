@@ -77,7 +77,7 @@ select ds_seq.nextval as ds_code, ds.* from (
     case 
       when numerator_unit='%' then nvl(numerator_value, 0)
       when nvl(numerator_value, 0)=0 then 0 
-      else numerator_value/nvl(denominator_value, 1)
+      else nvl(numerator_value, 0)/nvl(denominator_value, 1)
     end as numerator_value, 
     nvl(numerator_unit, ' ') as numerator_unit, 
     nvl(denominator_unit, ' ') as denominator_unit
