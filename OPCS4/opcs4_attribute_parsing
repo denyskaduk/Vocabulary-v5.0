@@ -1,0 +1,814 @@
+
+/*-------------------------
+--OPCS4_TO_SNOMED_ATTR--
+----------PARSING----------
+---------------------------*/
+
+--create table to look at the SNOMED attributes of OPCS4_to_SNOMED mapping (with subsumes); 
+--CREATE TABLE OPCS4_NEW_ATTR AS 
+SELECT distinct a.concept_code_1, 
+a.concept_id_1, 
+a.concept_name_1, 
+a.relationship AS sno_rel_id, 
+a.concept_id AS sno_id,
+a.concept_code AS sno_code, 
+a.concept_name AS sno_name, 
+cr.relationship_id AS attr_rel_id, 
+c.concept_id AS attr_id, 
+c.concept_code AS attr_code, 
+c.concept_name AS attr_name, 
+c.domain_id, c.concept_class_id, 
+c.standard_concept, 
+cr.invalid_reason,
+c.invalid_reason as category
+FROM  final_mapping_opcs4 a
+JOIN devv5.concept_relationship cr 
+ON a.concept_id = cr.concept_id_1 and cr.invalid_reason IS NULL 
+AND  cr.relationship_id NOT IN ('Maps to', 'Mapped from', 'Is a', 'Subsumes','Follows', 'Occurs before', 'Asso proc of', 'Due to of', 'Focus of', 'Interprets of', 'Asso with finding', 'Finding method of',  'Concept poss_eq from',
+'Has complication', 'Specimen proc of', 'Concept was_a from', 'Concept same_as from', 'Concept replaces', 'Has temp finding', 'Concept replaced by', 'Method of', 'Has finding site')
+JOIN concept c 
+ON c.concept_id = cr.concept_id_2 
+AND c.vocabulary_id = 'SNOMED' 
+AND c.standard_concept='S'
+where upper(concept_code_1) not like 'Z%' 
+;
+-- mark concepts for convenience;
+UPDATE OPCS4_NEW_ATTR 
+	SET category = 'M' 
+WHERE sno_rel_id = 'Maps to'
+; -- 6454
+
+UPDATE OPCS4_NEW_ATTR 
+	SET category = 'I'
+WHERE concept_id_1 NOT IN ( SELECT concept_id_1 FROM OPCS4_NEW_ATTR WHERE sno_rel_id IN ( 'Subsumes', 'Maps to') )
+; -- 4453 
+
+UPDATE OPCS4_NEW_ATTR 
+	SET category = 'S'
+WHERE concept_id_1 IN ( SELECT concept_id_1 FROM OPCS4_MANMAP_16042018 WHERE sno_rel_id  = 'Subsumes')
+; -- 4106
+
+UPDATE OPCS4_NEW_ATTR 
+	SET category = 'S' 
+WHERE category  IS NULL
+; -- 1333
+
+--delete rows with 'Subsumes'
+DELETE FROM OPCS4_NEW_ATTR 
+WHERE sno_rel_id = 'Subsumes'
+; --4106
+
+-- insert non-standard drugs from SNOMED;
+INSERT INTO OPCS4_NEW_ATTR 
+SELECT 
+concept_code_1,
+concept_id_1,
+concept_name_1,
+sno_rel_id,
+sno_id,
+sno_code,
+sno_name, 
+relationship_id,
+concept_id, 
+concept_code,
+concept_name, 
+domain_id,
+concept_class_id,
+standard_concept,
+invalid_reason 
+FROM (SELECT DISTINCT concept_id_1, concept_code_1, concept_name_1, sno_rel_id, sno_id, sno_code, sno_name, cr.relationship_id, c.concept_id, c.concept_code, c.concept_name, c.domain_id, c.concept_class_id, c.standard_concept, a.invalid_reason  
+FROM  OPCS4_NEW_ATTR a 
+JOIN devv5.concept_relationship cr  
+ON a.sno_id = cr.concept_id_1 
+AND cr.invalid_reason IS NULL 
+AND  cr.relationship_id IN ('Has dir subst') 
+AND  concept_id_1 IN (SELECT DISTINCT concept_id_1 FROM OPCS4_NEW_ATTR) 
+JOIN devv5.concept c  ON c.concept_id = cr.concept_id_2 
+AND c.vocabulary_id = 'SNOMED' 
+AND c.domain_id = 'Drug'
+)a
+; -- 109
+
+--create the table with pairs 'ancestor-descendant' within the one concept_id_1 group;
+CREATE TABLE OPCS4_new_false_pairs AS 
+SELECT i.concept_id_1,
+		i.attr_id
+FROM OPCS4_NEW_ATTR i
+JOIN devv5.concept_ancestor a 
+ON i.attr_id = a.ancestor_concept_id 
+AND a.min_levels_of_separation != 0
+JOIN OPCS4_NEW_ATTR f 
+ON f.concept_id_1 = i.concept_id_1 
+AND a.descendant_concept_id = f.attr_id
+; 
+  
+--delete ancestors when descendant is present;  
+DELETE FROM OPCS4_NEW_ATTR 
+WHERE (concept_id_1, attr_id) IN (SELECT * FROM OPCS4_new_false_pairs)
+; -- 300
+
+/*-------------------------
+--OPCS4_TO_SNOMED_ATTR--
+---------MODIFICATION-------
+---------------------------*/
+
+--create table with icd_concepts + attributes;
+CREATE TABLE OPCS4_new_attr_all AS 
+(SELECT concept_code_1, 
+		concept_id_1, 
+		concept_name_1, 
+		attr_rel_id, 
+		attr_id, 
+		attr_code, 
+		attr_name, 
+		domain_id, 
+		concept_class_id, 
+		category  
+FROM OPCS4_new_attr)
+;
+
+--create table for subsequent insert of common attributes of subsumes; 
+CREATE TABLE OPCS4_new_attr_subs AS 
+SELECT a.concept_code_1, 
+		a.concept_id_1, 
+		a.concept_name_1, 
+		a.relationship_id AS sno_rel_id, 
+		a.concept_id AS sno_id, 
+		a.concept_code AS sno_code, 
+		a.concept_name AS sno_name, 
+		cr.relationship_id AS attr_rel_id, 
+		c.concept_id AS attr_id, 
+		c.concept_code AS attr_code, 
+		c.concept_name AS attr_name, 
+		c.domain_id, 
+		c.concept_class_id, 
+		c.standard_concept, 
+		c.invalid_reason AS category    
+FROM  OPCS4_MANMAP_16042018 a
+JOIN devv5.concept_relationship cr 
+ON a.concept_id = cr.concept_id_1 
+AND cr.invalid_reason IS NULL 
+AND  cr.relationship_id NOT IN 
+('Maps to', 'Mapped from', 'Is a', 'Subsumes','Follows', 'Occurs before', 'Asso proc of', 'Due to of', 'Focus of', 'Interprets of', 'Asso with finding', 'Finding method of',  'Concept poss_eq from',
+'Has complication', 'Specimen proc of', 'Concept was_a from', 'Concept same_as from', 'Concept replaces', 'Has temp finding',  'Concept replaced by', 'Method of', 'Has finding site')
+JOIN concept c 
+ON c.concept_id = cr.concept_id_2 
+AND c.vocabulary_id = 'SNOMED' 
+AND c.standard_concept='S'
+AND a. concept_id_1 IN 
+(SELECT DISTINCT concept_id_1 FROM OPCS4_manmap_16042018 WHERE relationship_id = 'Subsumes')
+AND a.concept_id_1 IN 
+(SELECT DISTINCT concept_id_1 FROM OPCS4_manmap_16042018 WHERE relationship_id = 'Is a')
+;
+
+-- insert general attributes of 'Subsumes' of the one 'Is a' 
+INSERT INTO OPCS4_new_attr_all
+SELECT
+concept_code_1, 
+concept_id_1,
+concept_name_1,
+attr_rel_id,
+attr_id,
+attr_code,
+attr_name,
+domain_id,
+concept_class_id,
+'N' 
+FROM (
+SELECT DISTINCT concept_code_1, concept_id_1, concept_name_1, attr_rel_id, attr_id, attr_code, attr_name, domain_id, concept_class_id, category 
+FROM OPCS4_new_attr_subs 
+WHERE  attr_id IN 
+(SELECT attr_id FROM OPCS4_new_attr_subs  
+WHERE sno_rel_id = 'Subsumes' 
+GROUP BY attr_id, attr_rel_id, concept_id_1 
+HAVING COUNT (1)>=2)
+AND attr_id NOT IN 
+(SELECT attr_id FROM OPCS4_new_attr_subs  
+WHERE sno_rel_id = 'Is a' 
+GROUP BY attr_id, attr_rel_id, concept_id_1 
+HAVING COUNT (1)=1)
+AND attr_id NOT IN 
+(SELECT attr_id FROM OPCS4_new_attr_subs  
+GROUP BY attr_id, attr_rel_id, concept_id_1 
+HAVING COUNT (1)=1)
+)a
+WHERE (concept_id_1, attr_rel_id,attr_name) NOT IN 
+(SELECT concept_id_1, attr_rel_id, attr_name 
+FROM OPCS4_NEW_ATTR_ALL)
+ ; -- 40
+
+-- insert percutaneous access where it's absent; 
+INSERT INTO OPCS4_new_attr_all
+SELECT
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has access',
+'4013298',
+'103388001',
+'Percutaneous approach',
+'Observation',
+'Qualifier Value',
+'N' 
+FROM devv5.concept d
+JOIN  
+(SELECT DISTINCT concept_id_1 FROM  OPCS4_new_attr_all
+WHERE  LOWER (concept_name_1) LIKE '%percutaneous%' 
+AND concept_id_1 NOT IN 
+(SELECT concept_id_1 FROM OPCS4_new_attr_all 
+WHERE lower(attr_name) LIKE '%percutaneous%approach%' 
+OR   lower(attr_name) LIKE '%percutaneous%transluminal%'  
+OR concept_code_1 IN ('37.68', '36.01', '36.02', '36.05')
+)
+) a 
+ON d.concept_id = a.concept_id_1
+; -- 22
+
+-- insert closed access where it's absent (excluding '%closed fracture%' and '%closed reduction%') 
+INSERT INTO OPCS4_new_attr_all
+SELECT
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has access',
+'4044379',
+'129237003',
+'Closed approach',
+'Observation',
+'Qualifier Value',
+'N'
+FROM devv5.concept d
+JOIN 
+(SELECT DISTINCT concept_id_1 
+FROM  OPCS4_new_attr_all
+WHERE  lower (concept_name_1) LIKE '%closed %'
+AND concept_id_1 NOT IN 
+(SELECT concept_id_1 FROM OPCS4_new_attr_all 
+WHERE attr_name = 'Closed approach' 
+AND attr_rel_id = 'Has access')
+AND lower (concept_name_1) NOT LIKE '%closed fracture%' 
+AND lower (concept_name_1) NOT LIKE '%closed reduction%'  
+AND  lower (concept_name_1) NOT LIKE '%percutaneous%'
+)a 
+ON d.concept_id = a.concept_id_1
+; --23
+
+-- insert open approach where it's absent (excluding '%open fracture%', '%open reduction%','open and other%', 'other and open%' ) 
+INSERT INTO OPCS4_new_attr_all
+SELECT
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has access',
+'4044378',
+'129236007',
+'Open approach',
+'Observation',
+'Qualifier Value',
+'N'
+FROM devv5.concept d
+JOIN  
+(SELECT DISTINCT concept_id_1 
+FROM  OPCS4_NEW_ATTR_ALL 
+WHERE  lower (concept_name_1) LIKE '%open %'
+AND concept_id_1 NOT IN 
+(SELECT concept_id_1 FROM OPCS4_new_attr_all WHERE attr_name = 'Open approach' AND attr_rel_id = 'Has access')
+AND lower (concept_name_1) NOT LIKE '%open fracture%' 
+AND lower (concept_name_1) NOT LIKE '%open reduction%' 
+AND  lower (concept_name_1) NOT LIKE '%open heart%'  
+AND lower (concept_name_1) NOT LIKE 'open and other%' 
+AND lower (concept_name_1) NOT LIKE 'other and open%') a 
+ON d.concept_id = a.concept_id_1
+; --18
+
+-- Insert 'Checking - action'  where concepts have '% check %' (if it's appropriate); 
+INSERT INTO OPCS4_new_attr_all 
+SELECT
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4232679',
+'360160009',
+'Checking - action',
+'Observation',
+'Qualifier Value',
+'N' 
+FROM devv5.concept d
+JOIN  
+(SELECT DISTINCT concept_id_1 
+FROM  OPCS4_new_attr_all 
+WHERE  lower (concept_name_1) LIKE '%check%'
+AND concept_id_1 NOT IN 
+(SELECT concept_id_1 FROM OPCS4_new_attr_all 
+WHERE attr_rel_id = 'Has method')
+) a 
+ON d.concept_id = a.concept_id_1
+;  -- 5
+
+-- Insert 'Evaluation - action'  where concepts have '%stress test%' and Has method ! = 'Evaluation - action' or 'Measurement - action' 
+INSERT INTO OPCS4_new_attr_all 
+SELECT
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4044176',
+'129265001',
+'Evaluation - action',
+'Observation',
+'Qualifier Value',
+'N' 
+FROM devv5.concept d
+JOIN  
+(SELECT DISTINCT concept_id_1 
+FROM  OPCS4_new_attr_all 
+WHERE  lower (concept_name_1) LIKE '%stress test%'
+AND concept_id_1 NOT IN 
+(SELECT concept_id_1 FROM OPCS4_new_attr_ALL 
+WHERE attr_name IN  ('Evaluation - action', 'Measurement - action')
+)
+) a 
+ON d.concept_id = a.concept_id_1
+;  -- 2
+
+-- Insert 'Diagnostinc intent'  for  diagnostic procedures 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has intent',
+'4129646',
+'261004008',
+'Diagnostic intent',
+'Observation',
+'Qualifier Value',
+ 'N' 
+from devv5.concept d
+join  
+(select distinct concept_id_1 
+from  OPCS4_new_attr_all 
+where  lower (concept_name_1) like '%diagnostic%'
+and concept_id_1 not in 
+(select concept_id_1 from OPCS4_new_attr_all 
+where attr_rel_id = 'Has intent' 
+or  attr_name = 'Examination - action')
+) a 
+on d.concept_id = a.concept_id_1
+;  -- 102;
+
+--Insert 'Using subst' - 'Contrast media', where concept_name_1 with '% contrast %', bit attr_rel_id != 'Using subst'
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Using subst',
+'4299338',
+'385420005',
+'Contrast media',
+'Observation',
+'Substance',
+ 'N'  
+from devv5.concept d
+join  
+(select distinct concept_id_1 from  OPCS4_new_attr_all 
+where  (lower (concept_name_1) like '% contrast %' 
+or lower (concept_name_1) like 'contrast%' 
+or lower (concept_name_1) like '%contrast')
+and concept_id_1 not in 
+(select concept_id_1 from OPCS4_new_attr_all where attr_rel_id = 'Using subst')) a 
+on d.concept_id = a.concept_id_1
+; --12
+
+--Insert 'Has focus - Alcoholism' for concepts with alcohol issues;
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has focus',
+'4218106',
+'7200002',
+'Alcoholism',
+'Condition',
+'Clinical Finding',
+ 'N'  
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  lower (concept_name_1) like '%alcohol%' and   lower (concept_name_1) not like '%drug%'
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where ATTR_REL_ID = 'Has focus')) a 
+on d.concept_id = a.concept_id_1
+; -- 4 
+
+--Insert 'Has focus - Substance abuse' for concepts with drug issues (be careful with it!); 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has focus',
+'4279309',
+'66214007',
+'Substance abuse',
+'Condition',
+'Clinical Finding',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1  from  OPCS4_new_attr_all 
+where  concept_code_1 != '94.25' and (
+lower (concept_name_1) like '%drug %' 
+or  lower (concept_name_1) like '%alcohol and drug%'  
+and   lower (concept_name_1) not like '%drug therapy%')
+and concept_id_1 not in 
+(select concept_id_1 from OPCS4_new_attr_all 
+where ATTR_REL_ID = 'Has focus')) a 
+on d.concept_id = a.concept_id_1
+; --8
+
+--Insert 'Inspection - action' for '%control of%' and attr_name like '%bleeding%';
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4043866',
+'129433002',
+'Inspection - action',
+'Observation',
+'Qualifier Value',
+'N'
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  lower (concept_name_1) like '%control of%' -- and attr_name like '%bleeding%'
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where ATTR_REL_ID = 'Has method' or concept_code_1 = '93.98')) a 
+on d.concept_id = a.concept_id_1
+; -- 10
+
+-- Insert   'Has revision status' for 'reopening', 'revisoin', 'secondary procedure'; 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has revision status',
+'4116366',
+'255231005',
+'Revision - value',
+'Observation',
+'Qualifier Value',
+'N'
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  (lower (concept_name_1) like '%revision%' or lower (concept_name_1) like '%reopening%' or lower (concept_name_1) like '%secondary procedure%' )
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id = 'Has revision status' or concept_name_1 like '%secondary membrane%')
+and concept_code_1 not in ('84.8', '49.75','37.8', '37.7', '57.22', '37.89', '84.66', '84.68' , '84.69', '84.67', '02.4' )) a 
+on d.concept_id = a.concept_id_1
+; -- 10
+
+--  Insert  'Evaluation - action' for concepts with '%evaluation%' 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4044176',
+'129265001',
+'Evaluation - action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all  where  lower (concept_name_1) like '%evaluation%' 
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id = 'Has method')) a 
+on d.concept_id = a.concept_id_1
+; -- 2
+
+--  Insert 'Therapy - action' for  concepts with '%therapy%' 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4236214',
+'360270004',
+'Therapy - action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  
+(select distinct concept_id_1 from  OPCS4_new_attr_all 
+where lower (concept_name_1) like '%therapy%' 
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id  = 'Has method')
+ ) a 
+on d.concept_id = a.concept_id_1
+; --29
+
+-- Insert 'Using energy' for Hypothermia  and Hyperthermia
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Using energy',
+'4112792',
+'285717004',
+'High temperature',
+'Observation',
+'Physical Force',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where concept_id_1 in (select concept_id_1 from OPCS4_new_attr_all where lower(concept_name_1) like '%hyperthermia%')
+ and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where   attr_rel_id = 'Using energy' )) a 
+on d.concept_id = a.concept_id_1
+; --1
+
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Using energy',
+'4110148',
+'285686007',
+'Low temperature',
+'Observation',
+'Physical Force',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where concept_id_1 in (select concept_id_1 from OPCS4_NEW_ATTR_ALL where lower(concept_name_1) like '%hypothermia%')
+ and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where   attr_rel_id = 'Using energy' )) a 
+on d.concept_id = a.concept_id_1
+; --2
+
+ -- Insert 'Using energy - Radiation' where (concept_name_1) like '%radiation%', but attr_rel_id  != 'Using energy'
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Using energy',
+'4220084',
+'82107009',
+'Radiation',
+'Observation',
+'Physical Force',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  lower (concept_name_1) like '%radiation%' and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id  = 'Using energy')
+ ) a 
+on d.concept_id = a.concept_id_1
+; --2
+
+--  Insert 'Using substance'  for concepts with '%radio%, when attr_rel_id not  in ( 'Using subst', 'Using energy', 'Has dir subst') and concept_id_1 not in ( '2007015', '2006620')  
+ insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Using subst',
+'4232493',
+'89457008',
+'Radioactive isotope',
+'Observation',
+'Substance',
+'N'
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  lower (concept_name_1) like '%radio%' and lower (concept_name_1) like not in ( '2007015', '2006620', '2006633', '2007446', '2006779', '2007468' )  
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id  in ( 'Using subst', 'Using energy', 'Has dir subst'))) a 
+on d.concept_id = a.concept_id_1
+;--2
+
+ --  Insert 'Has method - Radionuclide imaging - action'  for concepts with '%radioisotope%, when attr_rel_id ! = 'Has method'  
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4207470',
+'312421008',
+'Radionuclide imaging - action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  lower (concept_name_1) like '%radioisotope%'  
+and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id  = 'Has method' )) a 
+on d.concept_id = a.concept_id_1; -- 2
+
+--Insert 'Has focus'  - ' for heart surgery' 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has focus',
+'4275564',
+'64915003',
+'Operation on heart',
+'Procedure',
+'Procedure',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where lower (concept_name_1) like '% to %surgery%' and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id  = 'Has focus')
+ ) a 
+on d.concept_id = a.concept_id_1
+; --3 
+
+--Insert 'Has focus'  for 'treatment for cancer' 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has focus',
+'443392',
+'363346000',
+'Malignant neoplastic disease',
+'Condition',
+'Clinical Finding',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where lower (concept_name_1) like '%for %cancer%' and concept_id_1 not in (select concept_id_1 from OPCS4_new_attr_all where attr_rel_id  = 'Has focus')
+ ) a 
+on d.concept_id = a.concept_id_1
+; -- 1 
+
+-- Insert 'Has method - insertion' where it's absent 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4106470',
+'257867005',
+'Insertion - action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all 
+where concept_code_1 != '16.62'
+and lower (concept_name_1) like '%insertion%' 
+and  lower (concept_name_1) not like '%insertion or%' 
+and  lower (concept_name_1) not like '%insertion,%'
+and  concept_id_1 not in  
+(select concept_id_1 from  OPCS4_new_attr_all 
+where lower (attr_name) like '%insertion%' 
+or lower (attr_name) like '%intubation%' 
+or lower (attr_name) like '%reimplantation%'  
+and lower (attr_name) like 'insertion%' )
+ ) a 
+on d.concept_id = a.concept_id_1
+;--13
+
+-- Insert 'Biopsy' 4043842  129314006   Biopsy - action     Qualifier Value     Observation where it's absent
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4043842',
+'129314006',
+'Biopsy - action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where  lower (concept_name_1) like '%biopsy%'
+and concept_id_1 not in (select concept_id_1 from  OPCS4_new_attr_all where lower (attr_name) like '%biopsy%' or lower (attr_name) like 'biopsy%' )
+ ) a 
+on d.concept_id = a.concept_id_1; -- 7
+
+-- Insert Incision - action 
+Insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4044182',
+'129287005',
+'Incision - action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where (lower (concept_name_1) like '%incision of%' or lower (concept_name_1) like '%incision') and lower (concept_name_1) not like '%without incision'  
+and concept_id_1 not in (select concept_id_1 from  OPCS4_new_attr_all where lower (attr_name) like '%incision%' or lower (attr_name) like 'incision%' )) a 
+on d.concept_id = a.concept_id_1
+; -- 7
+
+--Insert Using device for '%microscopy%' where it's absent 
+Insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Using device',
+'4279164',
+'65473004',
+'Microscope',
+'Device',
+'Physical Object',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where lower (concept_name_1) like 'microscop%'
+and concept_id_1 not in (select concept_id_1 from  OPCS4_new_attr_all where lower (attr_name) like 'microscope%' or attr_rel_id = 'Using device')) a 
+on d.concept_id = a.concept_id_1; -- 48
+
+-- Insert 'Has method - Surgical action',  where it's needed, but absent (esp. for Is a) 
+insert into OPCS4_new_attr_all 
+select
+d.concept_code, 
+d.concept_id,
+d.concept_name,
+'Has method',
+'4045049',
+'129284003',
+'Surgical action',
+'Observation',
+'Qualifier Value',
+'N' 
+from devv5.concept d
+join  ( select distinct concept_id_1 from  OPCS4_new_attr_all where( lower (concept_name_1) like '%destruction%'  or  lower (concept_name_1) like '%implantation or replacement%' 
+ or  lower (concept_name_1) like '%incision%'   or  lower (concept_name_1) like '%insertion or replacement%'    or  lower (concept_name_1) like 'insertion%'   or  lower (concept_name_1) like 'operations%')  
+and concept_id_1 not in  ( select concept_id_1 from OPCS4_new_attr_all where attr_rel_id = 'Has method')
+and concept_id_1 not in (select concept_id_1 from  OPCS4_new_attr_all 
+where  (lower (attr_name) like '%destruction%' 
+or lower (attr_name) like '%surg%'
+or lower (attr_name) like '%cauterization%' 
+or lower (attr_name) like '%coagulation%'))
+ ) a 
+on d.concept_id = a.concept_id_1
+; -- 37
+
+--insert organ!!!!!
+
+
+
+
+
+-- insert missed concepts due to absent SNOMED attributes at all (they have 'F' category) 
+create table MISSED_ATTRIBUTES (concept_code_1 varchar (50) , concept_id_1 integer, concept_name_1 varchar (300), attr_rel_id varchar (20), attr_id integer, attr_code varchar (50), attr_name varchar (255), domain_id varchar (20), concept_class_id varchar (20), category varchar (1));
+-- Polina T. home PC
+WbImport -file=C:/Users/Polina/Desktop/OPCS4_Attributes_missed_attributes_0705.tsv
+         -type=text
+         -table=missed_attributes
+         -encoding="UTF-8"
+         -header=true
+         -decode=false
+         -dateFormat="yyyy-MM-dd"
+         -timestampFormat="yyyy-MM-dd HH:mm:ss"
+         -delimiter='\t'
+         -decimal=.
+         -fileColumns=concept_id_1,concept_code_1,concept_name_1,attr_rel_id,attr_id,attr_code,attr_name,domain_id,concept_class_id,category
+         -quoteCharEscaping=none
+         -ignoreIdentityColumns=false
+         -deleteTarget=false
+         -continueOnError=false
+         -batchSize=1000;
+   
+UPDATE missed_attributes
+   SET attr_id = c.concept_id,
+       domain_id = c.domain_id,
+       concept_class_id = c.concept_class_id
+       from devv5.concept c 
+       where attr_code = c.concept_code
+       and c.vocabulary_id = 'SNOMED'
+       ; -- 77
+       
+UPDATE missed_attributes
+SET concept_code_1 = '00'
+WHERE concept_code_1 = '0'
+; -- 1
+
+insert into OPCS4_NEW_ATTR_ALL 
+select
+concept_code_1, 
+concept_id_1,
+concept_name_1,
+attr_rel_id,
+attr_id,
+attr_code,
+attr_name,
+domain_id ,
+concept_class_id,
+category 
+from MISSED_ATTRIBUTES
+; -- 77 
+
+-- delete them (use CTID for pg instead of ROWID)
+delete from OPCS4_NEW_ATTR_ALL a
+where exists (select 1
+from OPCS4_NEW_ATTR_ALL b
+where b.concept_id_1 = a.concept_id_1 and
+b.attr_rel_id = a.attr_rel_id and
+b.attr_id = a.attr_id and
+b.ctid > a.ctid)
+; -- 75  
